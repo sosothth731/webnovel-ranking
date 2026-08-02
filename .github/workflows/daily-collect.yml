@@ -6,6 +6,9 @@ on:
     - cron: "0 22 * * *"
   workflow_dispatch: {} # 수동 실행 버튼도 활성화
 
+permissions:
+  contents: write # 결과 CSV를 저장소에 자동 커밋/푸시하기 위해 필요
+
 jobs:
   collect:
     runs-on: ubuntu-latest
