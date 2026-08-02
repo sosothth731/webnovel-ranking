@@ -1,0 +1,17 @@
+{
+  "name": "webnovel-ranking-collector",
+  "version": "1.0.0",
+  "description": "카카오페이지 / 리디북스 / 네이버시리즈 로맨스 랭킹 TOP15를 매일 자동 수집하여 CSV로 저장합니다.",
+  "type": "module",
+  "main": "src/collect.js",
+  "scripts": {
+    "collect": "node src/collect.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5"
+  }
+}
