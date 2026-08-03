@@ -41,6 +41,35 @@ export function deepFindArray(root, itemMatcher, minLength = 5) {
 }
 
 /**
+ * JSON 트리 전체를 재귀적으로 훑어서, 키 이름에 "date"가 들어간 필드들의 값 중
+ * YYYY-MM-DD / YYYY.MM.DD 형태로 보이는 것을 전부 모아 가장 이른 날짜를 반환한다.
+ * 정확한 필드명을 모를 때(사이트 구조가 바뀌었을 때) 쓰는 최후의 수단.
+ */
+export function findEarliestDateField(root, maxDepth = 6) {
+  const seen = new Set();
+  const dateLike = /^\d{4}[.\-]\d{2}[.\-]\d{2}/;
+  let earliest = null;
+
+  function walk(node, depth) {
+    if (!node || typeof node !== "object" || depth > maxDepth) return;
+    if (seen.has(node)) return;
+    seen.add(node);
+
+    for (const [key, value] of Object.entries(node)) {
+      if (typeof value === "string" && /date/i.test(key) && dateLike.test(value)) {
+        const normalized = value.slice(0, 10).replace(/\./g, "-");
+        if (!earliest || normalized < earliest) earliest = normalized;
+      } else if (value && typeof value === "object") {
+        walk(value, depth + 1);
+      }
+    }
+  }
+
+  walk(root, 0);
+  return earliest;
+}
+
+/**
  * 객체 안에서 이름에 keyword를 포함하는 첫 번째 키의 값을 찾는다 (대소문자 무시, 재귀 X, 얕은 탐색).
  */
 export function findFieldLike(obj, keyword) {

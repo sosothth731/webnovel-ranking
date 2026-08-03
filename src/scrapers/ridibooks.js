@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { fetchHtml, sleep, extractHashtags, extractRatingAndReviewCount, extractEarliestDate } from "../lib/http.js";
-import { deepFindArray, findFieldLike } from "../lib/deepFind.js";
+import { deepFindArray, findEarliestDateField } from "../lib/deepFind.js";
 
 const LIST_URL = "https://ridibooks.com/bestsellers/romance";
 const REQUEST_DELAY_MS = Number(process.env.REQUEST_DELAY_MS || 500);
@@ -73,32 +73,46 @@ function extractFromNextData($) {
     return null;
   }
 
-  const bookItems = deepFindArray(
-    json,
-    (item) =>
-      item &&
-      typeof item === "object" &&
-      typeof findFieldLike(item, "title") === "string" &&
-      (findFieldLike(item, "author") !== undefined || findFieldLike(item, "writer") !== undefined)
-  );
+  // 1순위: 실제로 확인된 정확한 경로.
+  // dehydratedState.queries 안에서 queryKey[0] === 'BestSellers'인 쿼리가
+  // data.bestsellers.items[] 에 랭킹 순서 그대로(0번=1위) 작품 목록을 담고 있다.
+  let items = null;
+  const queries = json?.props?.pageProps?.dehydratedState?.queries;
+  if (Array.isArray(queries)) {
+    const bestsellersQuery = queries.find(
+      (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "BestSellers"
+    );
+    items = bestsellersQuery?.state?.data?.bestsellers?.items;
+  }
 
-  if (!bookItems) return null;
+  // 2순위 폴백: 위 경로가 사이트 개편으로 바뀌었을 경우, 일반적인 형태로 배열을 다시 탐색.
+  if (!Array.isArray(items)) {
+    items = deepFindArray(
+      json,
+      (entry) => entry?.book?.title?.main && Array.isArray(entry?.book?.authors)
+    );
+  }
 
-  return bookItems.map((item) => {
-    const title = findFieldLike(item, "title") ?? "";
-    const authorField = findFieldLike(item, "author") ?? findFieldLike(item, "writer") ?? "";
-    const author = typeof authorField === "string" ? authorField : JSON.stringify(authorField);
-    const bookId = findFieldLike(item, "id") ?? findFieldLike(item, "bookId") ?? "";
-    const rating = findFieldLike(item, "rating") ?? findFieldLike(item, "score") ?? "";
-    const reviewCount = findFieldLike(item, "reviewCount") ?? findFieldLike(item, "ratingCount") ?? "";
-    const description = findFieldLike(item, "description") ?? findFieldLike(item, "phrase") ?? "";
+  if (!Array.isArray(items)) return null;
+
+  return items.map((entry) => {
+    const book = entry?.book ?? {};
+    const title = book?.series?.title || book?.title?.main || "";
+    const author = (book.authors || []).map((a) => a.name).filter(Boolean).join(", ");
+    const bookId = book.id ?? "";
+    const description = book?.introduction?.description ?? "";
+
+    const ratings = Array.isArray(book.ratings) ? book.ratings : [];
+    const totalCount = ratings.reduce((sum, r) => sum + (r.count || 0), 0);
+    const weightedSum = ratings.reduce((sum, r) => sum + (r.count || 0) * (r.rating || 0), 0);
+    const avgRating = totalCount ? (weightedSum / totalCount).toFixed(1) : "";
 
     return {
       bookId: String(bookId),
       title,
       author,
-      rating: rating ? String(rating) : "",
-      reviewCount: reviewCount ? String(reviewCount) : "",
+      rating: avgRating,
+      reviewCount: totalCount ? totalCount.toLocaleString("en-US") : "",
       keywords: extractHashtags(description),
     };
   });
@@ -143,7 +157,20 @@ async function fetchLaunchDate(bookId) {
   const html = await fetchHtml(`https://ridibooks.com/books/${bookId}`);
   const $ = cheerio.load(html);
 
-  // 상세페이지 정보 테이블(dt/dd 구조)에서 "발행"/"등록" 관련 항목을 우선적으로 찾는다.
+  // 1순위: 상세페이지에도 __NEXT_DATA__가 있다면, 그 안에서 이름에 "date"가 들어간
+  // 필드 중 가장 이른 날짜를 찾는다. (베스트 목록 페이지처럼 SSR JSON이 있을 가능성이 높음)
+  const nextDataRaw = $("#__NEXT_DATA__").html();
+  if (nextDataRaw) {
+    try {
+      const nextDataJson = JSON.parse(nextDataRaw);
+      const found = findEarliestDateField(nextDataJson);
+      if (found) return found;
+    } catch {
+      // JSON 파싱 실패 시 아래 폴백들로 계속 진행
+    }
+  }
+
+  // 2순위: 상세페이지 정보 테이블(dt/dd 구조)에서 "발행"/"등록" 관련 항목을 찾는다.
   let dateText = "";
   $("dt, th").each((_, el) => {
     const label = $(el).text();

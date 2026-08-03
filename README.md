@@ -56,7 +56,32 @@ npm run collect
 
 서버를 따로 켜둘 필요 없이 완전히 무료로 운영 가능합니다.
 
-## 5. 데이터 스키마
+## 5. 사이트로 보기 (GitHub Pages)
+
+저장소 루트의 `index.html`이 `output/webnovel_ranking.csv`를 읽어서
+날짜별·플랫폼별로 필터링하고 검색할 수 있는 페이지를 보여줍니다. 별도 서버나
+데이터베이스 없이 정적 파일만으로 동작합니다.
+
+**활성화 방법 (최초 1회):**
+
+1. 저장소 **Settings → Pages**로 이동
+2. **Build and deployment → Source**를 **"Deploy from a branch"**로 설정
+3. **Branch**를 `main`, 폴더를 `/ (root)`로 선택 → **Save**
+4. 1~2분 뒤 `https://<사용자명>.github.io/<저장소명>/` 주소로 접속하면 사이트가 뜹니다.
+
+이후로는 GitHub Actions가 매일 CSV를 커밋할 때마다 사이트도 자동으로 최신 데이터를 보여줍니다
+(사이트를 다시 만들거나 배포할 필요 없이, 페이지를 새로고침하면 그날 데이터가 그대로 반영됩니다).
+
+- **날짜 탭**으로 하루씩 넘겨볼 수 있고
+- **플랫폼 탭**으로 카카오페이지/리디북스/네이버시리즈를 골라볼 수 있고
+- **검색창**에 작품명·작가명·키워드로 검색할 수 있습니다
+
+private 저장소도 GitHub Pages 자체는 무료로 켤 수 있지만, 페이지 내용은 인터넷에
+공개됩니다 (링크를 아는 사람은 누구나 볼 수 있음). 완전히 비공개로 두고 싶다면
+GitHub Pages 대신 로컬에서 `output/webnovel_ranking.csv`를 엑셀로 열어보는 것을
+권장드립니다.
+
+## 6. 데이터 스키마
 
 | 컬럼 | 설명 |
 |---|---|
@@ -71,7 +96,7 @@ npm run collect
 | 키워드 | 확인 가능한 플랫폼만, 공백으로 구분된 #태그 나열 |
 | URL | 작품 상세페이지 링크 |
 
-## 6. 알아두어야 할 것
+## 7. 알아두어야 할 것
 
 - **사이트 구조가 바뀌면 스크립트가 깨질 수 있습니다.** 특히 리디북스는 `__NEXT_DATA__` 기반
   파싱을 1차로 시도하고, 실패하면 HTML 직접 파싱으로 자동 전환하지만 완벽하지 않을 수 있습니다.
@@ -84,10 +109,11 @@ npm run collect
 - 카카오페이지 API나 사이트들의 봇 차단 정책이 강화되면 요청이 막힐 수 있습니다. 이 경우
   User-Agent 조정이나 실제 로그인 세션 쿠키 사용이 필요할 수 있습니다.
 
-## 7. 폴더 구조
+## 8. 폴더 구조
 
 ```
 webnovel-ranking-collector/
+├─ index.html                # GitHub Pages로 여는 대시보드 (5번 참고)
 ├─ src/
 │  ├─ collect.js            # 실행 진입점 (3사 순회 → CSV 저장)
 │  ├─ scrapers/
@@ -97,8 +123,8 @@ webnovel-ranking-collector/
 │  └─ lib/
 │     ├─ http.js            # fetch 래퍼, 정규식 유틸(해시태그/별점/날짜 추출)
 │     ├─ csv.js              # CSV 저장
-│     └─ deepFind.js         # __NEXT_DATA__ 안에서 목록 배열 찾기
+│     └─ deepFind.js         # __NEXT_DATA__ 안에서 목록 배열/날짜 필드 찾기
 ├─ .github/workflows/daily-collect.yml
 ├─ .env.example
-└─ output/                   # 실행 결과가 여기 쌓입니다
+└─ output/                   # 실행 결과가 여기 쌓입니다 (index.html이 이 폴더를 읽음)
 ```

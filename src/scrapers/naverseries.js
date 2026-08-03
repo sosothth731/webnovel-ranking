@@ -10,26 +10,25 @@ export async function collectNaverSeries() {
   const $ = cheerio.load(html);
 
   const items = [];
-  const seen = new Set();
 
-  // 목록의 각 작품은 h3 > a[href*="detail.series?productNo="] 구조로 렌더링됨 (직접 확인된 구조).
-  $('a[href*="detail.series?productNo="]').each((_, el) => {
-    const href = $(el).attr("href") || "";
+  // 확인된 정확한 구조: <ul class="comic_top_lst"> 안의 각 <li> 하나가 작품 한 편.
+  // 제목은 반드시 .comic_cont h3 안의 링크에서만 가져온다 — 썸네일 링크(.pic)는
+  // "매일10시무료" 같은 뱃지 텍스트를 포함하고 있어서 잘못된 제목으로 오인되기 쉽다.
+  $(".comic_top_lst > li").each((_, li) => {
+    const $li = $(li);
+    const $titleLink = $li.find('.comic_cont h3 a[href*="detail.series?productNo="]').first();
+    if (!$titleLink.length) return;
+
+    const href = $titleLink.attr("href") || "";
     const match = href.match(/productNo=(\d+)/);
     if (!match) return;
-    const productNo = match[1];
-    if (seen.has(productNo)) return;
 
-    const title = $(el).text().trim();
-    if (!title) return; // 썸네일 이미지용 링크(텍스트 없음)는 건너뜀
-
-    seen.add(productNo);
-
-    const $item = $(el).closest("li");
-    const author = $item.find(".author").first().text().trim();
-    const rating = $item.find(".score_num").first().text().trim();
-
-    items.push({ productNo, title, author, rating });
+    items.push({
+      productNo: match[1],
+      title: $titleLink.text().trim(),
+      author: $li.find(".comic_cont .author").first().text().trim(),
+      rating: $li.find(".comic_cont .score_num").first().text().trim(),
+    });
   });
 
   if (!items.length) {
