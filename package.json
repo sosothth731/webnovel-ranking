@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/collect.js",
   "scripts": {
-    "collect": "node src/collect.js"
+    "collect": "node src/collect.js",
+    "dedupe": "node scripts/dedupe-csv.js"
   },
   "engines": {
     "node": ">=18"

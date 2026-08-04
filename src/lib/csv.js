@@ -1,4 +1,4 @@
-import { mkdir, appendFile, writeFile, access } from "node:fs/promises";
+import { mkdir, writeFile, readFile, access } from "node:fs/promises";
 import path from "node:path";
 
 const HEADER = [
@@ -39,6 +39,53 @@ function rowToCsvLine(row, collectedDate) {
     .join(",");
 }
 
+/**
+ * 우리가 직접 쓴 CSV(쉼표 구분, 따옴표로 이스케이프)를 다시 배열의 배열로 읽어들인다.
+ * 첫 번째 요소는 헤더 행이다.
+ */
+export function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+  const clean = text.replace(/^\ufeff/, "");
+
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (clean[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else if (c === "\r") {
+      // \n에서 처리하므로 건너뜀
+    } else {
+      field += c;
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => !(r.length === 1 && r[0] === ""));
+}
+
 function todayKoreaDate() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -60,24 +107,33 @@ async function fileExists(filePath) {
 }
 
 /**
- * rows를 output/webnovel_ranking.csv 에 누적 저장(append)합니다.
- * 파일이 없으면 헤더를 먼저 씁니다.
- * 매일 실행해도 계속 같은 파일에 쌓이므로, 시간에 따른 순위 변화 추적이 가능합니다.
+ * rows를 output/webnovel_ranking.csv 에 저장합니다.
+ * 같은 날짜(확인날짜)의 기존 데이터가 이미 있으면 통째로 지우고 새로 씁니다 —
+ * 같은 날 워크플로우를 두 번 이상 돌려도(예: 버그 수정 후 재실행) 옛날 데이터와
+ * 새 데이터가 섞이지 않고, 항상 그날의 "가장 마지막 실행 결과"만 남습니다.
+ * 다른 날짜의 기존 데이터는 그대로 유지됩니다.
  */
 export async function appendRowsToCsv(rows, outputDir = "output") {
   await mkdir(outputDir, { recursive: true });
   const filePath = path.join(outputDir, "webnovel_ranking.csv");
   const collectedDate = todayKoreaDate();
 
-  const exists = await fileExists(filePath);
-  const lines = rows.map((row) => rowToCsvLine(row, collectedDate));
-
-  if (!exists) {
-    const bom = "\ufeff";
-    await writeFile(filePath, bom + HEADER.join(",") + "\r\n" + lines.join("\r\n") + "\r\n", "utf8");
-  } else {
-    await appendFile(filePath, lines.join("\r\n") + "\r\n", "utf8");
+  let keptLines = [];
+  if (await fileExists(filePath)) {
+    const raw = await readFile(filePath, "utf8");
+    const records = parseCsv(raw);
+    const dataRecords = records.slice(1); // 헤더 행 제외
+    keptLines = dataRecords
+      .filter((r) => r[0] !== collectedDate) // 오늘 날짜 기존 데이터는 제거
+      .map((r) => r.map(csvEscape).join(","));
   }
+
+  const newLines = rows.map((row) => rowToCsvLine(row, collectedDate));
+  const allLines = [...keptLines, ...newLines];
+
+  const bom = "\ufeff";
+  const body = allLines.length ? allLines.join("\r\n") + "\r\n" : "";
+  await writeFile(filePath, bom + HEADER.join(",") + "\r\n" + body, "utf8");
 
   return { filePath, collectedDate, count: rows.length };
 }

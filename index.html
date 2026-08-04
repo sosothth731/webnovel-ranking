@@ -128,6 +128,12 @@
   .rank-badge.ridi{ background: var(--ridi-tint); color: var(--ridi-text); }
   .rank-badge.naver{ background: var(--naver-tint); color: var(--naver-text); }
   .card-launch{ margin-left:auto; font-size:10.5px; color: var(--text-muted); white-space:nowrap; }
+  .card-external{
+    flex-shrink:0; width:20px; height:20px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; color: var(--text-muted); background: var(--accent-soft);
+  }
+  .card-external:hover{ color: var(--accent); }
 
   .card-title{
     font-weight:700; font-size:14.5px; margin-bottom:3px;
@@ -166,11 +172,50 @@
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+
+  /* 상세 페이지 */
+  .back-btn{
+    display:inline-flex; align-items:center; gap:6px;
+    background: var(--surface); border:1px solid var(--hairline);
+    border-radius:999px; padding:8px 14px; font-size:12.5px; font-weight:600;
+    color: var(--text); cursor:pointer; margin-bottom:20px; box-shadow: var(--shadow);
+  }
+  .back-btn:hover{ color: var(--accent); }
+
+  .detail-head{ display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+  .detail-title{
+    font-family:"Manrope",sans-serif; font-weight:800; font-size: clamp(20px,3.4vw,28px);
+    margin: 0 0 4px;
+  }
+  .detail-author{ font-size:13.5px; color: var(--text-muted); margin-bottom:10px; }
+  .detail-original-link{
+    display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
+    color: var(--accent); background: var(--accent-soft); border-radius:999px;
+    padding:6px 13px; margin-bottom:24px;
+  }
+  .detail-original-link:hover{ opacity:0.8; }
+
+  .chart-card{
+    background: var(--surface-solid); border:1px solid var(--hairline); border-radius:20px;
+    padding:20px 18px 12px; box-shadow: var(--shadow); margin-bottom:22px;
+  }
+  .chart-title{ font-size:12.5px; color: var(--text-muted); margin-bottom:12px; }
+  .chart-card svg text{ font-family:"Pretendard",sans-serif; }
+
+  .history-table{ width:100%; border-collapse:collapse; background: var(--surface-solid);
+    border:1px solid var(--hairline); border-radius:16px; overflow:hidden; box-shadow: var(--shadow); }
+  .history-table th, .history-table td{ padding:10px 14px; text-align:left; font-size:12.5px; }
+  .history-table thead th{ color: var(--text-muted); font-weight:600; font-size:11px;
+    border-bottom:1px solid var(--hairline); }
+  .history-table tbody tr:not(:last-child) td{ border-bottom:1px solid var(--hairline); }
+  .history-table td:nth-child(2), .history-table th:nth-child(2){ text-align:center; }
+  .history-table td:nth-child(3), .history-table th:nth-child(3){ text-align:right; font-weight:600; }
 </style>
 </head>
 <body>
 <div class="page">
 
+<div id="boardView">
   <header class="topbar">
     <div class="brand">
       <div class="brand-icon">📖</div>
@@ -193,6 +238,9 @@
   </div>
 
   <div id="boardWrap"></div>
+</div>
+
+<div id="detailView" style="display:none;"></div>
 
 </div>
 
@@ -242,7 +290,7 @@ function renderDateTabs(){
 
 function cardHtml(r, cls){
   const rank = Number(r["순위"]);
-  const url = r["URL"] || "#";
+  const url = r["URL"] || "";
   const keywords = (r["키워드"] || "").split(/\s+/).filter(Boolean).slice(0, 3);
   const chipRow = keywords.length
     ? `<div class="chip-row">${keywords.map((k) => `<span class="chip ${cls}">${escapeHtml(k)}</span>`).join("")}</div>`
@@ -253,8 +301,9 @@ function cardHtml(r, cls){
       <div class="card-top">
         <div class="rank-badge ${cls}">${rank}</div>
         <div class="card-launch">${escapeHtml(r["론칭일"]) || "론칭일 미상"}</div>
+        <a class="card-external" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="원본 페이지에서 보기" aria-label="원본 페이지에서 보기">↗</a>
       </div>
-      <a class="card-title" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(r["작품명"])}</a>
+      <a class="card-title" href="#/work/${encodeURIComponent(url)}">${escapeHtml(r["작품명"])}</a>
       <div class="card-author">${escapeHtml(r["작가명"]) || "작가 미상"}</div>
       ${chipRow}
       <div class="card-footer">
@@ -310,6 +359,164 @@ function renderBoard(){
   wrap.innerHTML = `<div class="board">${columns}</div>`;
 }
 
+const CHART_COLOR = { kakao: "#C99A2E", ridi: "#3E7FA6", naver: "#4C9A5B" };
+
+/**
+ * "1,234,567" / "19.5만" / "4.7(3,063)" 같은 지표값 문자열에서
+ * 그래프에 쓸 숫자를 뽑아낸다. 리디북스는 괄호 안 리뷰수를 사용한다
+ * (별점은 0~5 범위라 추이 그래프에 안 맞아서, 리뷰수 증가로 대체).
+ */
+function parseMetricNumber(platform, raw){
+  if (!raw) return null;
+  if (platform === "리디북스"){
+    const m = raw.match(/\(([\d,]+)\)/);
+    return m ? Number(m[1].replace(/,/g, "")) : null;
+  }
+  const manMatch = raw.match(/^([\d.,]+)\s*만$/);
+  if (manMatch) return Math.round(parseFloat(manMatch[1].replace(/,/g, "")) * 10000);
+  const eokMatch = raw.match(/^([\d.,]+)\s*억$/);
+  if (eokMatch) return Math.round(parseFloat(eokMatch[1].replace(/,/g, "")) * 100000000);
+  const plain = Number(raw.replace(/,/g, ""));
+  return Number.isFinite(plain) ? plain : null;
+}
+
+function chartYLabel(platform){
+  return platform === "리디북스" ? "리뷰수" : (platform === "네이버시리즈" ? "다운로드수" : "뷰수");
+}
+
+function buildLineChartSvg(points, color){
+  const width = 640, height = 220;
+  const pad = { top: 16, right: 16, bottom: 26, left: 46 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+
+  const values = points.map((p) => p.value).filter((v) => v != null);
+  if (!values.length){
+    return `<div class="empty-col">그래프로 그릴 숫자 데이터가 없습니다.</div>`;
+  }
+  const minV = Math.min(...values, 0);
+  const maxV = Math.max(...values);
+  const rangeV = maxV - minV || 1;
+
+  const n = points.length;
+  const xAt = (i) => pad.left + (n === 1 ? innerW / 2 : (innerW * i) / (n - 1));
+  const yAt = (v) => pad.top + innerH - ((v - minV) / rangeV) * innerH;
+
+  const withXY = points.map((p, i) => ({ ...p, cx: xAt(i), cy: p.value != null ? yAt(p.value) : null }));
+
+  const pathD = withXY
+    .filter((p) => p.cy != null)
+    .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.cx.toFixed(1)} ${p.cy.toFixed(1)}`)
+    .join(" ");
+
+  const gridVals = [minV, (minV + maxV) / 2, maxV];
+  const grid = gridVals.map((v) => {
+    const yy = yAt(v);
+    return `<line x1="${pad.left}" y1="${yy.toFixed(1)}" x2="${width - pad.right}" y2="${yy.toFixed(1)}" stroke="var(--hairline)" stroke-width="1" />
+      <text x="${pad.left - 8}" y="${(yy + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-muted)">${Math.round(v).toLocaleString()}</text>`;
+  }).join("");
+
+  const step = Math.max(1, Math.ceil(n / 6));
+  const dateLabels = withXY.map((p, i) => {
+    if (i !== 0 && i !== n - 1 && i % step !== 0) return "";
+    return `<text x="${p.cx.toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${escapeHtml(p.date.slice(5))}</text>`;
+  }).join("");
+
+  const dots = withXY.filter((p) => p.cy != null).map((p) =>
+    `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(p.date)} · ${p.value.toLocaleString()}</title></circle>`
+  ).join("");
+
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="220" role="img">
+    ${grid}
+    <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2.5" />
+    ${dots}
+    ${dateLabels}
+  </svg>`;
+}
+
+function clsOf(platformName){
+  return (PLATFORMS.find((p) => p.name === platformName) || {}).cls || "";
+}
+
+function getWorkHistory(url){
+  return allRows
+    .filter((r) => r["URL"] === url)
+    .map((r) => ({
+      date: r["확인날짜"],
+      rank: Number(r["순위"]),
+      metricType: r["지표종류"],
+      metricRaw: r["지표값"],
+      value: parseMetricNumber(r["플랫폼"], r["지표값"]),
+      platform: r["플랫폼"],
+      title: r["작품명"],
+      author: r["작가명"],
+      launchDate: r["론칭일"],
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function renderDetailView(url){
+  const history = getWorkHistory(url);
+  const container = document.getElementById("detailView");
+
+  if (!history.length){
+    container.innerHTML = `
+      <button class="back-btn" onclick="location.hash=''">← 목록으로</button>
+      <div class="empty-state">이 작품의 기록을 찾을 수 없습니다.</div>`;
+    return;
+  }
+
+  const latest = history[history.length - 1];
+  const cls = clsOf(latest.platform);
+  const yLabel = chartYLabel(latest.platform);
+  const chartSvg = buildLineChartSvg(
+    history.map((h) => ({ date: h.date, value: h.value })),
+    CHART_COLOR[cls] || "#8D86CE"
+  );
+
+  const rowsHtml = history.slice().reverse().map((h) =>
+    `<tr><td>${escapeHtml(h.date)}</td><td>${h.rank}위</td><td>${escapeHtml(h.metricRaw) || "—"}</td></tr>`
+  ).join("");
+
+  container.innerHTML = `
+    <button class="back-btn" onclick="location.hash=''">← 목록으로</button>
+    <div class="detail-head">
+      <span class="tag ${cls}" style="display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--${cls}-tint);color:var(--${cls}-text);">${escapeHtml(latest.platform)}</span>
+      <span class="card-launch" style="font-size:12px;color:var(--text-muted);">${escapeHtml(latest.launchDate) || "론칭일 미상"} 론칭</span>
+    </div>
+    <h1 class="detail-title">${escapeHtml(latest.title)}</h1>
+    <div class="detail-author">${escapeHtml(latest.author) || "작가 미상"}</div>
+    <a class="detail-original-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">원본 페이지에서 보기 ↗</a>
+
+    <div class="chart-card">
+      <div class="chart-title">${escapeHtml(yLabel)} 추이 · 수집된 ${history.length}개 지점 (TOP15 안에 든 날짜만 기록됩니다)</div>
+      ${chartSvg}
+    </div>
+
+    <table class="history-table">
+      <thead><tr><th>날짜</th><th>순위</th><th>${escapeHtml(latest.metricType)}</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+}
+
+function route(){
+  const hash = location.hash;
+  const boardView = document.getElementById("boardView");
+  const detailView = document.getElementById("detailView");
+
+  if (hash.startsWith("#/work/")){
+    boardView.style.display = "none";
+    detailView.style.display = "block";
+    renderDetailView(decodeURIComponent(hash.slice("#/work/".length)));
+    window.scrollTo(0, 0);
+  } else {
+    detailView.style.display = "none";
+    boardView.style.display = "block";
+  }
+}
+
+window.addEventListener("hashchange", route);
+
 function setup(){
   dateValues = [...new Set(allRows.map((r) => r["확인날짜"]))].sort().reverse();
   state.date = dateValues[0] || null;
@@ -322,6 +529,7 @@ function setup(){
   });
 
   renderBoard();
+  route();
 }
 
 fetch(CSV_PATH)
