@@ -114,6 +114,8 @@
   }
   .theme-toggle:hover{ color: var(--accent); }
   .theme-toggle svg{ display:block; }
+  .theme-toggle.active{ background: var(--accent); color:#fff; border-color: var(--accent); }
+  .theme-toggle.active:hover{ color:#fff; opacity:0.9; }
 
   .date-row{
     display:flex; align-items:center; gap:14px; flex-wrap: wrap; margin-bottom: 26px;
@@ -329,6 +331,11 @@
       </svg>
       <input type="text" id="searchInput" placeholder="작품명 · 작가명 · 키워드 검색">
     </div>
+    <button type="button" class="theme-toggle" id="trendToggle" aria-label="추이 그래프 표시 전환" title="추이 그래프 표시/숨김">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 17l5-5 4 3 6-7 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
     <button type="button" class="theme-toggle" id="themeToggle" aria-label="다크 모드 전환">
       <svg id="themeIconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/>
@@ -394,11 +401,22 @@ function toggleTheme(){
   }
   localStorage.setItem("theme", next || "light");
   applyThemeIcons();
-  renderBoard(); // 다크 모드 전용 스파크라인/등락 표시를 새로 반영
+  renderBoard();
   if (document.getElementById("detailView").style.display === "block"){
     const hash = location.hash;
     if (hash.startsWith("#/work/")) renderDetailView(decodeURIComponent(hash.slice("#/work/".length)));
   }
+}
+
+function applyTrendToggleUI(){
+  document.getElementById("trendToggle").classList.toggle("active", state.showTrend);
+}
+
+function toggleTrend(){
+  state.showTrend = !state.showTrend;
+  localStorage.setItem("showTrend", state.showTrend ? "1" : "0");
+  applyTrendToggleUI();
+  renderBoard();
 }
 
 const CSV_PATH = "output/webnovel_ranking.csv";
@@ -411,7 +429,7 @@ const PLATFORMS = [
 let allRows = [];
 let dateValues = [];
 let dateSet = new Set();
-let state = { date: null, query: "", viewYM: null };
+let state = { date: null, query: "", viewYM: null, showTrend: true };
 
 function escapeHtml(str){
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({
@@ -567,7 +585,7 @@ function cardHtml(r, cls){
 
   // 다크 모드에서만 전일 대비 등락 + 스파크라인을 보여준다 (요청 반영: 파스텔 모드는 기존 그대로 유지).
   let sparkRow = "";
-  if (isDarkTheme() && url){
+  if (state.showTrend && url){
     const { points, deltaPct } = computeTrend(url, r["확인날짜"]);
     const sparkColor = deltaPct == null ? "#6B7690" : deltaPct >= 0 ? "#34D399" : "#F87171";
     const sparkSvg = buildSparkline(points, sparkColor);
@@ -843,8 +861,14 @@ function setup(){
   dateSet = new Set(dateValues);
   state.date = dateValues[0] || null;
 
+  const savedTrend = localStorage.getItem("showTrend");
+  state.showTrend = savedTrend === null ? true : savedTrend === "1";
+
   applyThemeIcons();
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+
+  applyTrendToggleUI();
+  document.getElementById("trendToggle").addEventListener("click", toggleTrend);
 
   renderDateNav();
 
