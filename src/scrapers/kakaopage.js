@@ -36,18 +36,26 @@ export async function collectKakaoPage() {
   }
 
   const rows = list
-    .map((item) => ({
-      platform: "카카오페이지",
-      rank: Number(item?.service_property?.rank),
-      title: item?.title ?? "",
-      author: item?.authors ?? "",
-      launchDate:
-        typeof item?.start_sale_dt === "string" ? item.start_sale_dt.slice(0, 10) : "",
-      metricType: "뷰수",
-      metricValue: formatNumber(item?.service_property?.view_count),
-      keywords: "", // 랭킹 API 응답에 태그가 없다면 빈 값. 필요 시 작품 상세 API 추가 연동 필요.
-      url: item?.id ? `https://page.kakao.com/content/${item.id}` : "",
-    }))
+    .map((item) => {
+      const seriesId = item?.series_id;
+      const title = item?.title ?? "";
+      const url = seriesId
+        ? `https://page.kakao.com/content/${seriesId}`
+        : "";
+
+      return {
+        platform: "카카오페이지",
+        rank: Number(item?.service_property?.rank),
+        title,
+        author: item?.authors ?? "",
+        launchDate:
+          typeof item?.start_sale_dt === "string" ? item.start_sale_dt.slice(0, 10) : "",
+        metricType: "뷰수",
+        metricValue: formatNumber(item?.service_property?.view_count),
+        keywords: "", // 랭킹 API 응답에 태그가 없다면 빈 값. 필요 시 작품 상세 API 추가 연동 필요.
+        url,
+      };
+    })
     .filter((row) => Number.isFinite(row.rank) && row.rank >= 1 && row.rank <= 15)
     .sort((a, b) => a.rank - b.rank);
 

@@ -7,10 +7,15 @@
 <title>웹소설 랭킹 보드</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Pretendard&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Pretendard&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
   :root{
+    --page-bg:
+      radial-gradient(circle at 8% 8%, #FBE7EF 0%, transparent 42%),
+      radial-gradient(circle at 92% 15%, #E3ECFB 0%, transparent 45%),
+      radial-gradient(circle at 50% 100%, #EDE8FA 0%, transparent 50%),
+      #F7F5FA;
     --text: #33313B;
     --text-muted: #8B8894;
     --surface: rgba(255,255,255,0.86);
@@ -19,6 +24,7 @@
     --accent: #8D86CE;
     --accent-soft: rgba(141,134,206,0.14);
     --shadow: 0 8px 24px rgba(80,60,110,0.08);
+    --font-num: "Manrope", sans-serif;
 
     --kakao-tint: #FCEBBE;
     --kakao-text: #8A6A16;
@@ -32,6 +38,31 @@
     --naver-text: #3A6B45;
     --naver-head: #8ECC98;
   }
+
+  [data-theme="dark"]{
+    --page-bg: #0A0E17;
+    --text: #E7EAF3;
+    --text-muted: #6B7690;
+    --surface: #121826;
+    --surface-solid: #121826;
+    --hairline: #232B45;
+    --accent: #5B8DEF;
+    --accent-soft: rgba(91,141,239,0.16);
+    --shadow: 0 8px 20px rgba(0,0,0,0.35);
+    --font-num: "IBM Plex Mono", monospace;
+
+    --kakao-tint: rgba(240,180,41,0.14);
+    --kakao-text: #F0B429;
+    --kakao-head: #F0B429;
+
+    --ridi-tint: rgba(34,211,238,0.14);
+    --ridi-text: #22D3EE;
+    --ridi-head: #22D3EE;
+
+    --naver-tint: rgba(52,211,153,0.14);
+    --naver-text: #34D399;
+    --naver-head: #34D399;
+  }
   *{ box-sizing: border-box; }
   body{
     margin:0;
@@ -39,12 +70,9 @@
     color: var(--text);
     font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     line-height: 1.5;
-    background:
-      radial-gradient(circle at 8% 8%, #FBE7EF 0%, transparent 42%),
-      radial-gradient(circle at 92% 15%, #E3ECFB 0%, transparent 45%),
-      radial-gradient(circle at 50% 100%, #EDE8FA 0%, transparent 50%),
-      #F7F5FA;
+    background: var(--page-bg);
     background-attachment: fixed;
+    transition: background 0.2s, color 0.2s;
   }
   a{ color: inherit; text-decoration: none; }
 
@@ -78,18 +106,74 @@
   .search-box input::placeholder{ color: var(--text-muted); }
   .search-box svg{ flex-shrink:0; color: var(--text-muted); }
 
+  .theme-toggle{
+    display:flex; align-items:center; justify-content:center;
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    background: var(--surface); border:1px solid var(--hairline);
+    box-shadow: var(--shadow); cursor:pointer; color: var(--text);
+  }
+  .theme-toggle:hover{ color: var(--accent); }
+  .theme-toggle svg{ display:block; }
+
   .date-row{
     display:flex; align-items:center; gap:14px; flex-wrap: wrap; margin-bottom: 26px;
   }
   .date-label{ font-size: 13.5px; color: var(--text-muted); }
   .date-label b{ color: var(--text); font-weight:700; }
-  .date-pills{ display:flex; gap:4px; background: var(--surface); border:1px solid var(--hairline); border-radius:999px; padding:4px; box-shadow: var(--shadow); }
-  .pill{
-    font-size:12.5px; font-family: inherit; border:none; background:transparent;
-    color: var(--text-muted); padding:6px 13px; border-radius:999px; cursor:pointer; white-space:nowrap;
+
+  .date-nav{
+    display:flex; align-items:center; gap:6px; background: var(--surface);
+    border:1px solid var(--hairline); border-radius:999px; padding:4px;
+    box-shadow: var(--shadow); position: relative;
   }
-  .pill:hover{ color: var(--text); }
-  .pill.active{ background: var(--accent); color:#fff; font-weight:700; }
+  .nav-arrow{
+    width:26px; height:26px; border-radius:50%; border:none;
+    background: transparent; color: var(--text); font-size:15px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .nav-arrow:hover:not(:disabled){ background: var(--accent-soft); color: var(--accent); }
+  .nav-arrow:disabled{ opacity:0.3; cursor:default; }
+
+  .cal-wrap{ position: relative; }
+  .date-trigger{
+    display:flex; align-items:center; gap:5px;
+    font-family:"Pretendard",sans-serif; font-size:12.5px; font-weight:600;
+    color: var(--text); background:transparent; border:none; outline:none;
+    padding:6px 8px; border-radius:999px; cursor:pointer;
+  }
+  .date-trigger:hover{ background: var(--accent-soft); color: var(--accent); }
+  .date-trigger svg{ flex-shrink:0; transition: transform 0.15s; }
+  .date-trigger[aria-expanded="true"] svg{ transform: rotate(180deg); }
+
+  .calendar-popover{
+    position:absolute; top: calc(100% + 8px); left:50%; transform: translateX(-50%);
+    background: var(--surface-solid); border:1px solid var(--hairline); border-radius:16px;
+    box-shadow: 0 16px 40px rgba(80,60,110,0.16); padding:14px; width:264px; z-index:20;
+  }
+  .cal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-month-label{ font-size:13px; font-weight:700; }
+  .cal-nav-btn{
+    width:24px; height:24px; border-radius:50%; border:none; background:transparent;
+    color: var(--text); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .cal-nav-btn:hover:not(:disabled){ background: var(--accent-soft); color: var(--accent); }
+  .cal-nav-btn:disabled{ opacity:0.25; cursor:default; }
+
+  .cal-weekdays{ display:grid; grid-template-columns: repeat(7, 1fr); margin-bottom:2px; }
+  .cal-weekdays span{ text-align:center; font-size:10px; color: var(--text-muted); font-weight:600; padding:4px 0; }
+
+  .cal-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap:2px; }
+  .cal-day{
+    width:100%; aspect-ratio:1; border-radius:50%; border:none; background:transparent;
+    font-family:"Pretendard",sans-serif; font-size:11.5px; color: var(--text-muted);
+    cursor:default; display:flex; align-items:center; justify-content:center;
+  }
+  .cal-day.empty{ visibility:hidden; }
+  .cal-day.has-data{ color: var(--text); font-weight:600; cursor:pointer; background: var(--accent-soft); }
+  .cal-day.has-data:hover{ background: var(--accent); color:#fff; }
+  .cal-day.selected{ background: var(--accent) !important; color:#fff !important; }
+  .cal-day:disabled:not(.has-data){ opacity:0.35; }
 
   .board{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
   @media (max-width: 860px){ .board{ grid-template-columns: 1fr; } }
@@ -121,7 +205,7 @@
   .rank-badge{
     width:26px; height:26px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
-    font-family:"Manrope",sans-serif; font-weight:800; font-size:12px;
+    font-family: var(--font-num); font-weight:800; font-size:12px;
     flex-shrink:0; color: var(--text);
   }
   .rank-badge.kakao{ background: var(--kakao-tint); color: var(--kakao-text); }
@@ -148,11 +232,22 @@
   .chip.ridi{ background: var(--ridi-tint); color: var(--ridi-text); }
   .chip.naver{ background: var(--naver-tint); color: var(--naver-text); }
 
+  .spark-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .spark-row svg{ flex:1; min-width:0; }
+  .delta{ font-family: var(--font-num); font-size:10.5px; font-weight:700; white-space:nowrap; flex-shrink:0; }
+  .delta.up{ color:#34D399; }
+  .delta.down{ color:#F87171; }
+  .delta.neutral{ color: var(--text-muted); }
+  .delta.chip{ font-size:12px; padding:3px 10px; border-radius:999px; }
+  .delta.chip.up{ background: rgba(52,211,153,0.14); }
+  .delta.chip.down{ background: rgba(248,113,113,0.14); }
+  .delta.chip.neutral{ background: var(--accent-soft); }
+
   .card-footer{
     display:flex; align-items:center; justify-content:space-between;
     padding-top: 9px; border-top: 1px solid var(--hairline);
   }
-  .metric-value{ font-family:"Manrope",sans-serif; font-weight:800; font-size:13.5px; }
+  .metric-value{ font-family: var(--font-num); font-weight:800; font-size:13.5px; }
   .metric-type{ font-size:10.5px; color: var(--text-muted); }
 
   .empty-col{
@@ -191,9 +286,13 @@
   .detail-original-link{
     display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
     color: var(--accent); background: var(--accent-soft); border-radius:999px;
-    padding:6px 13px; margin-bottom:24px;
+    padding:6px 13px; margin-bottom:20px;
   }
   .detail-original-link:hover{ opacity:0.8; }
+
+  .hero-stat{ display:flex; align-items:baseline; gap:10px; margin-bottom:22px; flex-wrap:wrap; }
+  .hero-value{ font-family: var(--font-num); font-weight:800; font-size:30px; letter-spacing:-0.01em; }
+  .hero-sublabel{ font-size:11px; color: var(--text-muted); }
 
   .chart-card{
     background: var(--surface-solid); border:1px solid var(--hairline); border-radius:20px;
@@ -230,11 +329,40 @@
       </svg>
       <input type="text" id="searchInput" placeholder="작품명 · 작가명 · 키워드 검색">
     </div>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="다크 모드 전환">
+      <svg id="themeIconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <svg id="themeIconMoon" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:none;">
+        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </svg>
+    </button>
   </header>
 
   <div class="date-row">
     <span class="date-label" id="dateLabel">불러오는 중…</span>
-    <div class="date-pills" id="dateTabs"></div>
+    <div class="date-nav">
+      <button type="button" class="nav-arrow" id="datePrev" aria-label="이전 날짜">‹</button>
+      <div class="cal-wrap">
+        <button type="button" class="date-trigger" id="dateTrigger" aria-haspopup="true" aria-expanded="false">
+          <span id="dateTriggerText">날짜 선택</span>
+          <svg width="9" height="6" viewBox="0 0 9 6" fill="none"><path d="M1 1L4.5 5L8 1" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
+        <div class="calendar-popover" id="calendarPopover" hidden>
+          <div class="cal-header">
+            <button type="button" class="cal-nav-btn" id="calPrevMonth" aria-label="이전 달">‹</button>
+            <span class="cal-month-label" id="calMonthLabel"></span>
+            <button type="button" class="cal-nav-btn" id="calNextMonth" aria-label="다음 달">›</button>
+          </div>
+          <div class="cal-weekdays">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+      </div>
+      <button type="button" class="nav-arrow" id="dateNext" aria-label="다음 날짜">›</button>
+    </div>
   </div>
 
   <div id="boardWrap"></div>
@@ -245,6 +373,34 @@
 </div>
 
 <script>
+// 저장된 테마를 최대한 빨리 적용해서, 밝은 테마가 잠깐 번쩍이는 걸 방지한다.
+(function initTheme(){
+  const saved = localStorage.getItem("theme");
+  if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+})();
+
+function applyThemeIcons(){
+  const isDark = isDarkTheme();
+  document.getElementById("themeIconSun").style.display = isDark ? "none" : "block";
+  document.getElementById("themeIconMoon").style.display = isDark ? "block" : "none";
+}
+
+function toggleTheme(){
+  const next = isDarkTheme() ? "" : "dark";
+  if (next){
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  localStorage.setItem("theme", next || "light");
+  applyThemeIcons();
+  renderBoard(); // 다크 모드 전용 스파크라인/등락 표시를 새로 반영
+  if (document.getElementById("detailView").style.display === "block"){
+    const hash = location.hash;
+    if (hash.startsWith("#/work/")) renderDetailView(decodeURIComponent(hash.slice("#/work/".length)));
+  }
+}
+
 const CSV_PATH = "output/webnovel_ranking.csv";
 const PLATFORMS = [
   { name: "카카오페이지", cls: "kakao" },
@@ -254,7 +410,8 @@ const PLATFORMS = [
 
 let allRows = [];
 let dateValues = [];
-let state = { date: null, query: "" };
+let dateSet = new Set();
+let state = { date: null, query: "", viewYM: null };
 
 function escapeHtml(str){
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({
@@ -269,32 +426,153 @@ function formatDateLabel(dateStr){
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
 }
 
-function renderDateTabs(){
-  const container = document.getElementById("dateTabs");
-  container.innerHTML = "";
-  dateValues.forEach((v) => {
-    const btn = document.createElement("button");
-    btn.className = "pill" + (v === state.date ? " active" : "");
-    btn.textContent = v.slice(5).replace("-", "/");
-    btn.addEventListener("click", () => {
-      state.date = v;
-      renderDateTabs();
-      renderBoard();
-    });
-    container.appendChild(btn);
-  });
+function formatDateShort(dateStr){
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00+09:00");
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${dateStr} (${days[d.getDay()]})`;
+}
+
+function pad2(n){ return String(n).padStart(2, "0"); }
+
+function addMonths(ym, delta){
+  let [y, m] = ym.split("-").map(Number);
+  m += delta;
+  while (m > 12){ m -= 12; y += 1; }
+  while (m < 1){ m += 12; y -= 1; }
+  return `${y}-${pad2(m)}`;
+}
+
+function renderDateNav(){
+  const prevBtn = document.getElementById("datePrev");
+  const nextBtn = document.getElementById("dateNext");
+
+  document.getElementById("dateTriggerText").textContent = state.date
+    ? formatDateShort(state.date)
+    : "날짜 선택";
+
+  const idx = dateValues.indexOf(state.date);
+  prevBtn.disabled = idx === -1 || idx >= dateValues.length - 1; // 더 이전 날짜 없음
+  nextBtn.disabled = idx <= 0; // 더 최신 날짜 없음
+
   document.getElementById("dateLabel").innerHTML = state.date
     ? `오늘은 <b>${formatDateLabel(state.date)}</b>`
     : "";
 }
 
+function minMaxYM(){
+  if (!dateValues.length) return { min: null, max: null };
+  const sorted = [...dateValues].sort();
+  return { min: sorted[0].slice(0, 7), max: sorted[sorted.length - 1].slice(0, 7) };
+}
+
+function renderCalendarPopover(){
+  const [vy, vm] = state.viewYM.split("-").map(Number);
+  document.getElementById("calMonthLabel").textContent = `${vy}년 ${vm}월`;
+
+  const firstWeekday = new Date(vy, vm - 1, 1).getDay();
+  const totalDays = new Date(vy, vm, 0).getDate();
+
+  let cells = "";
+  for (let i = 0; i < firstWeekday; i++){
+    cells += `<span class="cal-day empty"></span>`;
+  }
+  for (let day = 1; day <= totalDays; day++){
+    const dateStr = `${vy}-${pad2(vm)}-${pad2(day)}`;
+    const hasData = dateSet.has(dateStr);
+    const isSelected = dateStr === state.date;
+    cells += `<button type="button" class="cal-day${hasData ? " has-data" : ""}${isSelected ? " selected" : ""}"
+      data-date="${dateStr}"${hasData ? "" : " disabled"}>${day}</button>`;
+  }
+  document.getElementById("calGrid").innerHTML = cells;
+
+  document.querySelectorAll("#calGrid .cal-day.has-data").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.date = btn.dataset.date;
+      closeCalendar();
+      renderDateNav();
+      renderBoard();
+    });
+  });
+
+  const { min, max } = minMaxYM();
+  document.getElementById("calPrevMonth").disabled = !min || state.viewYM <= min;
+  document.getElementById("calNextMonth").disabled = !max || state.viewYM >= max;
+}
+
+function openCalendar(){
+  state.viewYM = state.date ? state.date.slice(0, 7) : minMaxYM().max;
+  if (!state.viewYM) return;
+  document.getElementById("calendarPopover").hidden = false;
+  document.getElementById("dateTrigger").setAttribute("aria-expanded", "true");
+  renderCalendarPopover();
+}
+
+function closeCalendar(){
+  document.getElementById("calendarPopover").hidden = true;
+  document.getElementById("dateTrigger").setAttribute("aria-expanded", "false");
+}
+
+function toggleCalendar(){
+  const isOpen = !document.getElementById("calendarPopover").hidden;
+  if (isOpen) closeCalendar(); else openCalendar();
+}
+
+function isDarkTheme(){
+  return document.documentElement.getAttribute("data-theme") === "dark";
+}
+
+/**
+ * 해당 작품의 uptoDate 기준까지의 기록에서, 마지막 값과 그 이전 값을 비교해
+ * 전일(정확히는 "그 전 수집일") 대비 등락률과, 미니 스파크라인용 최근 값 목록을 만든다.
+ */
+function computeTrend(url, uptoDate){
+  const hist = getWorkHistory(url).filter((h) => h.date <= uptoDate);
+  const last = hist[hist.length - 1];
+  const prev = hist[hist.length - 2];
+  const deltaPct =
+    last && prev && last.value != null && prev.value != null && prev.value !== 0
+      ? ((last.value - prev.value) / prev.value) * 100
+      : null;
+  return { points: hist.slice(-7).map((h) => h.value), deltaPct };
+}
+
+function buildSparkline(values, color){
+  const nums = values.filter((v) => v != null);
+  if (nums.length < 2) return "";
+  const width = 100, height = 24;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = max - min || 1;
+  const step = width / (nums.length - 1);
+  const pts = nums.map((v, i) => `${(i * step).toFixed(1)},${(height - ((v - min) / range) * height).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/></svg>`;
+}
+
+function deltaBadgeHtml(deltaPct, chip){
+  const cls = chip ? "delta chip" : "delta";
+  if (deltaPct == null) return `<span class="${cls} neutral">NEW</span>`;
+  const isUp = deltaPct >= 0;
+  return `<span class="${cls} ${isUp ? "up" : "down"}">${isUp ? "▲" : "▼"} ${Math.abs(deltaPct).toFixed(1)}%</span>`;
+}
+
 function cardHtml(r, cls){
   const rank = Number(r["순위"]);
   const url = r["URL"] || "";
-  const keywords = (r["키워드"] || "").split(/\s+/).filter(Boolean).slice(0, 3);
+  // 네이버시리즈는 카드에선 키워드를 숨기고, 상세페이지에서만 보여준다 (요청 반영).
+  const keywords = cls === "naver" ? [] : (r["키워드"] || "").split(/\s+/).filter(Boolean).slice(0, 3);
   const chipRow = keywords.length
     ? `<div class="chip-row">${keywords.map((k) => `<span class="chip ${cls}">${escapeHtml(k)}</span>`).join("")}</div>`
     : "";
+
+  // 다크 모드에서만 전일 대비 등락 + 스파크라인을 보여준다 (요청 반영: 파스텔 모드는 기존 그대로 유지).
+  let sparkRow = "";
+  if (isDarkTheme() && url){
+    const { points, deltaPct } = computeTrend(url, r["확인날짜"]);
+    const sparkColor = deltaPct == null ? "#6B7690" : deltaPct >= 0 ? "#34D399" : "#F87171";
+    const sparkSvg = buildSparkline(points, sparkColor);
+    sparkRow = `<div class="spark-row">${deltaBadgeHtml(deltaPct, false)}${sparkSvg}</div>`;
+  }
 
   return `
     <div class="card">
@@ -306,6 +584,7 @@ function cardHtml(r, cls){
       <a class="card-title" href="#/work/${encodeURIComponent(url)}">${escapeHtml(r["작품명"])}</a>
       <div class="card-author">${escapeHtml(r["작가명"]) || "작가 미상"}</div>
       ${chipRow}
+      ${sparkRow}
       <div class="card-footer">
         <span class="metric-value">${escapeHtml(r["지표값"]) || "—"}</span>
         <span class="metric-type">${escapeHtml(r["지표종류"])}</span>
@@ -359,7 +638,13 @@ function renderBoard(){
   wrap.innerHTML = `<div class="board">${columns}</div>`;
 }
 
-const CHART_COLOR = { kakao: "#C99A2E", ridi: "#3E7FA6", naver: "#4C9A5B" };
+const CHART_COLOR_LIGHT = { kakao: "#C99A2E", ridi: "#3E7FA6", naver: "#4C9A5B" };
+const CHART_COLOR_DARK = { kakao: "#F0B429", ridi: "#22D3EE", naver: "#34D399" };
+
+function chartColorFor(cls){
+  const map = isDarkTheme() ? CHART_COLOR_DARK : CHART_COLOR_LIGHT;
+  return map[cls] || (isDarkTheme() ? "#5B8DEF" : "#8D86CE");
+}
 
 /**
  * "1,234,567" / "19.5만" / "4.7(3,063)" 같은 지표값 문자열에서
@@ -426,8 +711,23 @@ function buildLineChartSvg(points, color){
     `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(p.date)} · ${p.value.toLocaleString()}</title></circle>`
   ).join("");
 
+  const validPoints = withXY.filter((p) => p.cy != null);
+  const baseline = height - pad.bottom;
+  const areaPath = validPoints.length > 1
+    ? `M ${validPoints[0].cx.toFixed(1)} ${baseline} ` +
+      validPoints.map((p) => `L ${p.cx.toFixed(1)} ${p.cy.toFixed(1)}`).join(" ") +
+      ` L ${validPoints[validPoints.length - 1].cx.toFixed(1)} ${baseline} Z`
+    : "";
+
   return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="220" role="img">
+    <defs>
+      <linearGradient id="chartAreaFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
     ${grid}
+    <path d="${areaPath}" fill="url(#chartAreaFill)" stroke="none" />
     <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2.5" />
     ${dots}
     ${dateLabels}
@@ -451,6 +751,7 @@ function getWorkHistory(url){
       title: r["작품명"],
       author: r["작가명"],
       launchDate: r["론칭일"],
+      keywords: r["키워드"] || "",
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -467,12 +768,25 @@ function renderDetailView(url){
   }
 
   const latest = history[history.length - 1];
+  const prevEntry = history.length > 1 ? history[history.length - 2] : null;
   const cls = clsOf(latest.platform);
   const yLabel = chartYLabel(latest.platform);
   const chartSvg = buildLineChartSvg(
     history.map((h) => ({ date: h.date, value: h.value })),
-    CHART_COLOR[cls] || "#8D86CE"
+    chartColorFor(cls)
   );
+
+  const deltaPct =
+    prevEntry && latest.value != null && prevEntry.value != null && prevEntry.value !== 0
+      ? ((latest.value - prevEntry.value) / prevEntry.value) * 100
+      : null;
+  const heroValue = latest.value != null ? latest.value.toLocaleString() : (latest.metricRaw || "—");
+
+  const keywordSource = [...history].reverse().find((h) => h.keywords && h.keywords.trim());
+  const keywords = keywordSource ? keywordSource.keywords.split(/\s+/).filter(Boolean) : [];
+  const keywordRow = keywords.length
+    ? `<div class="chip-row" style="margin-bottom:16px;">${keywords.map((k) => `<span class="chip ${cls}">${escapeHtml(k)}</span>`).join("")}</div>`
+    : "";
 
   const rowsHtml = history.slice().reverse().map((h) =>
     `<tr><td>${escapeHtml(h.date)}</td><td>${h.rank}위</td><td>${escapeHtml(h.metricRaw) || "—"}</td></tr>`
@@ -486,7 +800,14 @@ function renderDetailView(url){
     </div>
     <h1 class="detail-title">${escapeHtml(latest.title)}</h1>
     <div class="detail-author">${escapeHtml(latest.author) || "작가 미상"}</div>
+    ${keywordRow}
     <a class="detail-original-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">원본 페이지에서 보기 ↗</a>
+
+    <div class="hero-stat">
+      <span class="hero-value">${escapeHtml(heroValue)}</span>
+      ${deltaBadgeHtml(deltaPct, true)}
+      <span class="hero-sublabel">전일 대비 (${escapeHtml(yLabel)})</span>
+    </div>
 
     <div class="chart-card">
       <div class="chart-title">${escapeHtml(yLabel)} 추이 · 수집된 ${history.length}개 지점 (TOP15 안에 든 날짜만 기록됩니다)</div>
@@ -519,9 +840,50 @@ window.addEventListener("hashchange", route);
 
 function setup(){
   dateValues = [...new Set(allRows.map((r) => r["확인날짜"]))].sort().reverse();
+  dateSet = new Set(dateValues);
   state.date = dateValues[0] || null;
 
-  renderDateTabs();
+  applyThemeIcons();
+  document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+
+  renderDateNav();
+
+  document.getElementById("dateTrigger").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleCalendar();
+  });
+  document.getElementById("calPrevMonth").addEventListener("click", () => {
+    state.viewYM = addMonths(state.viewYM, -1);
+    renderCalendarPopover();
+  });
+  document.getElementById("calNextMonth").addEventListener("click", () => {
+    state.viewYM = addMonths(state.viewYM, 1);
+    renderCalendarPopover();
+  });
+  document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".cal-wrap");
+    if (wrap && !wrap.contains(e.target)) closeCalendar();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeCalendar();
+  });
+
+  document.getElementById("datePrev").addEventListener("click", () => {
+    const idx = dateValues.indexOf(state.date);
+    if (idx < dateValues.length - 1){
+      state.date = dateValues[idx + 1];
+      renderDateNav();
+      renderBoard();
+    }
+  });
+  document.getElementById("dateNext").addEventListener("click", () => {
+    const idx = dateValues.indexOf(state.date);
+    if (idx > 0){
+      state.date = dateValues[idx - 1];
+      renderDateNav();
+      renderBoard();
+    }
+  });
 
   document.getElementById("searchInput").addEventListener("input", (e) => {
     state.query = e.target.value;
