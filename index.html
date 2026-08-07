@@ -93,6 +93,17 @@
   .brand-title{ font-family:"Manrope",sans-serif; font-weight: 800; font-size: 19px; }
   .brand-sub{ font-size: 12px; color: var(--text-muted); }
 
+  .view-nav{
+    display:flex; gap:4px; background: var(--surface); border:1px solid var(--hairline);
+    border-radius:999px; padding:4px; box-shadow: var(--shadow);
+  }
+  .view-nav .pill{
+    font-size:12.5px; font-weight:600; color: var(--text-muted);
+    padding:7px 14px; border-radius:999px; text-decoration:none; white-space:nowrap;
+  }
+  .view-nav .pill:hover{ color: var(--text); }
+  .view-nav .pill.active{ background: var(--accent); color:#fff; }
+
   .search-box{
     margin-left:auto; display:flex; align-items:center; gap:8px;
     background: var(--surface); border: 1px solid var(--hairline);
@@ -311,42 +322,94 @@
   .history-table tbody tr:not(:last-child) td{ border-bottom:1px solid var(--hairline); }
   .history-table td:nth-child(2), .history-table th:nth-child(2){ text-align:center; }
   .history-table td:nth-child(3), .history-table th:nth-child(3){ text-align:right; font-weight:600; }
+
+  /* 인사이트 화면 */
+  .insight-header{ margin-bottom:22px; }
+  .insight-title{ font-family:"Manrope",sans-serif; font-weight:800; font-size:22px; margin:0 0 4px; }
+  .insight-sub{ font-size:12.5px; color: var(--text-muted); }
+
+  .insight-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:18px; margin-bottom:18px; }
+  @media (max-width: 780px){ .insight-grid{ grid-template-columns: 1fr; } }
+
+  .insight-card{
+    background: var(--surface-solid); border:1px solid var(--hairline); border-radius:18px;
+    padding:18px 18px 14px; box-shadow: var(--shadow);
+  }
+  .insight-card-head{ display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .insight-card-title{ font-weight:700; font-size:14.5px; }
+  .insight-card-icon{ font-size:15px; }
+  .insight-card-empty{ font-size:12.5px; color: var(--text-muted); padding:18px 0; text-align:center; }
+
+  .ins-row{
+    display:flex; align-items:center; gap:10px; padding:8px 0;
+    border-bottom:1px solid var(--hairline); font-size:12.5px;
+  }
+  .ins-row:last-child{ border-bottom:none; }
+  .ins-row .chip{ flex-shrink:0; }
+  .ins-row .ins-title{
+    flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    text-decoration:none; color: var(--text);
+  }
+  .ins-row .ins-title:hover{ color: var(--accent); }
+  .ins-row .ins-meta{ flex-shrink:0; font-size:11px; color: var(--text-muted); }
+  .ins-row .delta{ flex-shrink:0; font-size:11.5px; }
+  .ins-row .streak-badge{
+    flex-shrink:0; font-family: var(--font-num); font-weight:700; font-size:11.5px;
+    color: var(--text); background: var(--accent-soft); padding:2px 8px; border-radius:999px;
+  }
+
+  .kw-row{ display:flex; align-items:center; gap:10px; padding:6px 0; font-size:12.5px; }
+  .kw-label{ width:120px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .kw-bar-track{ flex:1; height:8px; border-radius:999px; background: var(--accent-soft); overflow:hidden; }
+  .kw-bar-fill{ height:100%; background: var(--accent); border-radius:999px; }
+  .kw-count{ width:28px; flex-shrink:0; text-align:right; font-family: var(--font-num); font-weight:700; font-size:11.5px; color: var(--text-muted); }
+
+  .insight-full{ grid-column: 1 / -1; }
 </style>
 </head>
 <body>
 <div class="page">
 
-<div id="boardView">
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-icon">📖</div>
-      <div>
-        <div class="brand-title">웹소설 랭킹 보드</div>
-        <div class="brand-sub">카카오페이지 · 리디북스 · 네이버시리즈 로맨스 TOP15</div>
-      </div>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">📖</div>
+    <div>
+      <div class="brand-title">웹소설 랭킹 보드</div>
+      <div class="brand-sub">카카오페이지 · 리디북스 · 네이버시리즈 로맨스 TOP15</div>
     </div>
-    <div class="search-box">
-      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M13.28 8.18a5.1 5.1 0 1 1-10.2 0 5.1 5.1 0 0 1 10.2 0m-1.031 5.069a6.5 6.5 0 1 1 .991-.989l4.695 4.695a.7.7 0 1 1-.99.99z" fill="currentColor"/>
-      </svg>
-      <input type="text" id="searchInput" placeholder="작품명 · 작가명 · 키워드 검색">
-    </div>
-    <button type="button" class="theme-toggle" id="trendToggle" aria-label="추이 그래프 표시 전환" title="추이 그래프 표시/숨김">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 17l5-5 4 3 6-7 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-    <button type="button" class="theme-toggle" id="themeToggle" aria-label="다크 모드 전환">
-      <svg id="themeIconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/>
-        <path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-      <svg id="themeIconMoon" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:none;">
-        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-      </svg>
-    </button>
-  </header>
+  </div>
+  <div class="view-nav">
+    <a href="#/" class="pill" id="navBoard">보드</a>
+    <a href="#/insights" class="pill" id="navInsights">인사이트</a>
+  </div>
+  <div class="search-box">
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13.28 8.18a5.1 5.1 0 1 1-10.2 0 5.1 5.1 0 0 1 10.2 0m-1.031 5.069a6.5 6.5 0 1 1 .991-.989l4.695 4.695a.7.7 0 1 1-.99.99z" fill="currentColor"/>
+    </svg>
+    <input type="text" id="searchInput" placeholder="작품명 · 작가명 · 키워드 검색">
+  </div>
+  <button type="button" class="theme-toggle" id="exportBtn" aria-label="현재 화면 CSV로 내보내기" title="현재 화면 CSV로 내보내기">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <button type="button" class="theme-toggle" id="trendToggle" aria-label="추이 그래프 표시 전환" title="추이 그래프 표시/숨김">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 17l5-5 4 3 6-7 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <button type="button" class="theme-toggle" id="themeToggle" aria-label="다크 모드 전환">
+    <svg id="themeIconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <svg id="themeIconMoon" width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:none;">
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </svg>
+  </button>
+</header>
 
+<div id="boardView">
   <div class="date-row">
     <span class="date-label" id="dateLabel">불러오는 중…</span>
     <div class="date-nav">
@@ -374,6 +437,8 @@
 
   <div id="boardWrap"></div>
 </div>
+
+<div id="insightsView" style="display:none;"></div>
 
 <div id="detailView" style="display:none;"></div>
 
@@ -838,20 +903,263 @@ function renderDetailView(url){
     </table>`;
 }
 
+function updateNavActive(hash){
+  document.getElementById("navBoard").classList.toggle("active", hash !== "#/insights" && !hash.startsWith("#/work/"));
+  document.getElementById("navInsights").classList.toggle("active", hash === "#/insights");
+}
+
+function rowsForDate(date){
+  return allRows.filter((r) => r["확인날짜"] === date);
+}
+
+/**
+ * 오늘(state.date) 대비 바로 이전 수집일 사이의 신규 진입 / 이탈 작품을 플랫폼별로 계산.
+ * 비교할 이전 날짜가 없으면(가장 오래된 날짜일 때) null 반환.
+ */
+function computeNewDropped(){
+  const idx = dateValues.indexOf(state.date);
+  if (idx === -1 || idx >= dateValues.length - 1) return null;
+  const prevDate = dateValues[idx + 1];
+  const todayRows = rowsForDate(state.date);
+  const prevRows = rowsForDate(prevDate);
+
+  const result = {};
+  PLATFORMS.forEach(({ name }) => {
+    const todayMap = new Map(todayRows.filter((r) => r["플랫폼"] === name).map((r) => [r["URL"], r]));
+    const prevMap = new Map(prevRows.filter((r) => r["플랫폼"] === name).map((r) => [r["URL"], r]));
+    const newEntries = [...todayMap.entries()].filter(([u]) => !prevMap.has(u)).map(([, r]) => r);
+    const dropped = [...prevMap.entries()].filter(([u]) => !todayMap.has(u)).map(([, r]) => r);
+    newEntries.sort((a, b) => Number(a["순위"]) - Number(b["순위"]));
+    dropped.sort((a, b) => Number(a["순위"]) - Number(b["순위"]));
+    result[name] = { newEntries, dropped };
+  });
+  return { prevDate, byPlatform: result };
+}
+
+/** 오늘(state.date) 기준, 전일 대비 지표 증가율이 높은 순으로 정렬한 목록 (상위 8개). */
+function computeGrowthRanking(){
+  const todayRows = rowsForDate(state.date);
+  const withDelta = todayRows
+    .map((r) => ({ row: r, deltaPct: computeTrend(r["URL"], state.date).deltaPct }))
+    .filter((x) => x.deltaPct != null);
+  withDelta.sort((a, b) => b.deltaPct - a.deltaPct);
+  return withDelta.slice(0, 8);
+}
+
+/** url이 uptoDate로부터 거슬러 올라가며 며칠 연속으로 TOP15에 있었는지 계산. */
+function computeStreak(url, uptoDate, urlSetsByDate){
+  const idx = dateValues.indexOf(uptoDate);
+  if (idx === -1) return 0;
+  let streak = 0;
+  for (let i = idx; i < dateValues.length; i++){
+    const set = urlSetsByDate.get(dateValues[i]);
+    if (set && set.has(url)) streak++;
+    else break;
+  }
+  return streak;
+}
+
+/** 오늘(state.date) 기준, 연속 진입일이 긴 순으로 정렬한 목록 (상위 8개). */
+function computeStreakRanking(){
+  const urlSetsByDate = new Map(
+    dateValues.map((d) => [d, new Set(rowsForDate(d).map((r) => r["URL"]))])
+  );
+  const todayRows = rowsForDate(state.date);
+  const withStreak = todayRows.map((r) => ({
+    row: r,
+    streak: computeStreak(r["URL"], state.date, urlSetsByDate),
+  }));
+  withStreak.sort((a, b) => b.streak - a.streak);
+  return withStreak.slice(0, 8);
+}
+
+/** 최근 N개 수집일(state.date 포함, 과거 방향) 동안의 키워드 등장 빈도 상위 12개. */
+function computeKeywordTrend(windowSize){
+  const idx = dateValues.indexOf(state.date);
+  if (idx === -1) return { entries: [], rangeCount: 0 };
+  const rangeDates = dateValues.slice(idx, idx + windowSize);
+  const rangeSet = new Set(rangeDates);
+  const counts = new Map();
+  allRows.forEach((r) => {
+    if (!rangeSet.has(r["확인날짜"])) return;
+    (r["키워드"] || "").split(/\s+/).filter(Boolean).forEach((k) => {
+      counts.set(k, (counts.get(k) || 0) + 1);
+    });
+  });
+  const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+  return { entries, rangeCount: rangeDates.length };
+}
+
+function insCardHtml(row, extraBadgeHtml){
+  const cls = clsOf(row["플랫폼"]);
+  const url = row["URL"] || "";
+  return `
+    <div class="ins-row">
+      <span class="chip ${cls}">${escapeHtml(row["플랫폼"])}</span>
+      <a class="ins-title" href="#/work/${encodeURIComponent(url)}">${escapeHtml(row["작품명"])}</a>
+      ${extraBadgeHtml}
+    </div>`;
+}
+
+function renderInsights(){
+  const container = document.getElementById("insightsView");
+
+  if (!allRows.length || !state.date){
+    container.innerHTML = `<div class="empty-state">아직 표시할 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  // 급상승 TOP
+  const growth = computeGrowthRanking();
+  const growthHtml = growth.length
+    ? growth.map(({ row, deltaPct }) => insCardHtml(row, deltaBadgeHtml(deltaPct, false))).join("")
+    : `<div class="insight-card-empty">비교할 이전 수집일이 없습니다</div>`;
+
+  // 롱런 지수
+  const streaks = computeStreakRanking().filter((x) => x.streak >= 2);
+  const streakHtml = streaks.length
+    ? streaks.map(({ row, streak }) => insCardHtml(row, `<span class="streak-badge">${streak}일째</span>`)).join("")
+    : `<div class="insight-card-empty">2일 이상 연속 진입한 작품이 아직 없습니다</div>`;
+
+  // 키워드 트렌드
+  const windowSize = 7;
+  const { entries: keywordEntries, rangeCount } = computeKeywordTrend(windowSize);
+  const maxCount = keywordEntries.length ? keywordEntries[0][1] : 1;
+  const keywordHtml = keywordEntries.length
+    ? keywordEntries.map(([kw, count]) => `
+        <div class="kw-row">
+          <span class="kw-label">${escapeHtml(kw)}</span>
+          <span class="kw-bar-track"><span class="kw-bar-fill" style="width:${Math.max(6, (count / maxCount) * 100)}%"></span></span>
+          <span class="kw-count">${count}</span>
+        </div>`).join("")
+    : `<div class="insight-card-empty">최근 기간에 키워드 데이터가 없습니다 (리디북스·네이버시리즈만 수집됩니다)</div>`;
+
+  // 신규 진입 / 이탈
+  const nd = computeNewDropped();
+  const newDroppedHtml = PLATFORMS.map(({ name, cls }) => {
+    if (!nd){
+      return `
+        <div class="insight-card">
+          <div class="insight-card-head"><span class="dot ${cls}"></span><span class="insight-card-title">${name}</span></div>
+          <div class="insight-card-empty">비교할 이전 날짜가 없습니다</div>
+        </div>`;
+    }
+    const { newEntries, dropped } = nd.byPlatform[name];
+    const newRows = newEntries.map((r) => insCardHtml(r, `<span class="delta up">NEW · ${r["순위"]}위</span>`)).join("");
+    const droppedRows = dropped.map((r) => `
+      <div class="ins-row">
+        <span class="chip ${cls}">${escapeHtml(name)}</span>
+        <span class="ins-title" style="cursor:default;">${escapeHtml(r["작품명"])}</span>
+        <span class="delta down">OUT · 전일 ${r["순위"]}위</span>
+      </div>`).join("");
+    const body = newRows + droppedRows;
+    return `
+      <div class="insight-card">
+        <div class="insight-card-head"><span class="dot ${cls}"></span><span class="insight-card-title">${name}</span></div>
+        ${body || `<div class="insight-card-empty">변동 없음</div>`}
+      </div>`;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="insight-header">
+      <h1 class="insight-title">인사이트</h1>
+      <p class="insight-sub">기준일 ${escapeHtml(state.date)} · 보드 화면에서 날짜를 바꾸면 여기도 같이 바뀝니다</p>
+    </div>
+
+    <div class="insight-grid">
+      <div class="insight-card">
+        <div class="insight-card-head"><span class="insight-card-icon">🚀</span><span class="insight-card-title">급상승 TOP</span></div>
+        ${growthHtml}
+      </div>
+      <div class="insight-card">
+        <div class="insight-card-head"><span class="insight-card-icon">🔥</span><span class="insight-card-title">롱런 지수 (연속 진입일)</span></div>
+        ${streakHtml}
+      </div>
+      <div class="insight-card insight-full">
+        <div class="insight-card-head"><span class="insight-card-icon">🏷️</span><span class="insight-card-title">최근 키워드 트렌드 (최근 수집일 ${rangeCount}일)</span></div>
+        ${keywordHtml}
+      </div>
+    </div>
+
+    <div class="insight-header" style="margin-top:8px;">
+      <h2 class="insight-title" style="font-size:16px;">오늘의 신규 진입 / 이탈</h2>
+    </div>
+    <div class="insight-grid">
+      ${newDroppedHtml}
+    </div>
+  `;
+}
+
+/** 현재 보드 화면에 보이는(날짜+검색어 필터가 적용된) 데이터를 CSV로 내보낸다. */
+function getVisibleRows(){
+  const q = state.query.trim().toLowerCase();
+  let rows = allRows.filter((r) => r["확인날짜"] === state.date);
+  if (q){
+    rows = rows.filter((r) =>
+      (r["작품명"] || "").toLowerCase().includes(q) ||
+      (r["작가명"] || "").toLowerCase().includes(q) ||
+      (r["키워드"] || "").toLowerCase().includes(q)
+    );
+  }
+  rows.sort((a, b) => {
+    if (a["플랫폼"] !== b["플랫폼"]) return a["플랫폼"].localeCompare(b["플랫폼"]);
+    return Number(a["순위"]) - Number(b["순위"]);
+  });
+  return rows;
+}
+
+function exportCurrentViewCsv(){
+  const rows = getVisibleRows();
+  if (!rows.length){
+    alert("내보낼 데이터가 없습니다. 날짜나 검색어를 확인해주세요.");
+    return;
+  }
+  const header = ["확인날짜", "플랫폼", "순위", "작품명", "작가명", "론칭일", "지표종류", "지표값", "키워드", "URL"];
+  const esc = (v) => {
+    const s = String(v ?? "");
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [header.join(",")].concat(rows.map((r) => header.map((h) => esc(r[h])).join(",")));
+  const csv = "\ufeff" + lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `webnovel_ranking_${state.date || "export"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function route(){
   const hash = location.hash;
+  const header = document.querySelector(".topbar");
   const boardView = document.getElementById("boardView");
+  const insightsView = document.getElementById("insightsView");
   const detailView = document.getElementById("detailView");
 
   if (hash.startsWith("#/work/")){
+    header.style.display = "none";
     boardView.style.display = "none";
+    insightsView.style.display = "none";
     detailView.style.display = "block";
     renderDetailView(decodeURIComponent(hash.slice("#/work/".length)));
     window.scrollTo(0, 0);
-  } else {
+  } else if (hash === "#/insights"){
+    header.style.display = "flex";
+    boardView.style.display = "none";
     detailView.style.display = "none";
+    insightsView.style.display = "block";
+    renderInsights();
+    window.scrollTo(0, 0);
+  } else {
+    header.style.display = "flex";
+    detailView.style.display = "none";
+    insightsView.style.display = "none";
     boardView.style.display = "block";
   }
+  updateNavActive(hash);
 }
 
 window.addEventListener("hashchange", route);
@@ -869,6 +1177,7 @@ function setup(){
 
   applyTrendToggleUI();
   document.getElementById("trendToggle").addEventListener("click", toggleTrend);
+  document.getElementById("exportBtn").addEventListener("click", exportCurrentViewCsv);
 
   renderDateNav();
 
