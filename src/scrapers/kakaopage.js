@@ -1,36 +1,29 @@
-import { fetchJson } from "../lib/http.js";
+import { fetchJson, sleep } from "../lib/http.js";
 
 const LANDING_URL = "https://page.kakao.com/landing/ranking/11/89/";
+const REQUEST_DELAY_MS = Number(process.env.REQUEST_DELAY_MS || 500);
 
 /**
- * 랭킹 API 응답 한 항목(item)에서 장르/태그로 보이는 값을 찾는다.
- * 정확한 필드명이 계속 바뀌는 걸 겪어봐서, 흔히 쓰이는 이름 후보를 순서대로 시도한다.
- * 배열이면 공백으로 이어붙이고, 문자열이면 그대로 쓴다.
+ * 작품 하나의 키워드(테마)를 가져온다. 실측으로 확인된 API:
+ * https://bff-page.kakao.com/api/gateway/api/v1/content/about?series_id={id}
+ * 응답의 result.theme_keyword_list[].title 이 "현대로맨스", "재회물" 같은 키워드다.
  */
-function extractKeywords(item) {
-  const candidates = [
-    item?.genre_names,
-    item?.genreNames,
-    item?.tag_names,
-    item?.tagNames,
-    item?.tags,
-    item?.badge_list,
-    item?.badgeList,
-    item?.badges,
-    item?.category_names,
-    item?.categoryNames,
-    item?.sub_genre,
-  ];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate) && candidate.length) {
-      return candidate.map(String).join(" ");
-    }
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-  return "";
+async function fetchKeywords(seriesId) {
+  if (!seriesId) return "";
+  const url = `https://bff-page.kakao.com/api/gateway/api/v1/content/about?series_id=${seriesId}`;
+  const json = await fetchJson(url, {
+    headers: {
+      Referer: `https://page.kakao.com/content/${seriesId}`,
+      Origin: "https://page.kakao.com",
+    },
+  });
+  const list = json?.result?.theme_keyword_list;
+  if (!Array.isArray(list)) return "";
+  return list
+    .map((k) => k?.title)
+    .filter(Boolean)
+    .map((t) => `#${t.replace(/\s+/g, "")}`)
+    .join(" ");
 }
 
 /**
@@ -75,6 +68,7 @@ export async function collectKakaoPage() {
         : "";
 
       return {
+        seriesId,
         platform: "카카오페이지",
         rank: Number(item?.service_property?.rank),
         title,
@@ -83,7 +77,7 @@ export async function collectKakaoPage() {
           typeof item?.start_sale_dt === "string" ? item.start_sale_dt.slice(0, 10) : "",
         metricType: "뷰수",
         metricValue: formatNumber(item?.service_property?.view_count),
-        keywords: extractKeywords(item),
+        keywords: "",
         url,
       };
     })
@@ -94,7 +88,17 @@ export async function collectKakaoPage() {
     throw new Error("카카오페이지: 1~15위 데이터를 찾지 못했습니다. 응답 구조를 확인해주세요.");
   }
 
-  return rows;
+  // 키워드는 작품마다 별도 API를 하나씩 더 호출해야 해서, 순위 API 이후에 이어서 채운다.
+  for (const row of rows) {
+    try {
+      row.keywords = await fetchKeywords(row.seriesId);
+    } catch (err) {
+      console.warn(`[카카오페이지] ${row.title} 키워드 조회 실패: ${err.message}`);
+    }
+    await sleep(REQUEST_DELAY_MS);
+  }
+
+  return rows.map(({ seriesId, ...rest }) => rest); // 내부용 seriesId는 최종 결과에서 제외
 }
 
 function formatNumber(value) {

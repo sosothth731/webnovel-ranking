@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { fetchHtml, sleep, extractHashtags, extractRatingAndReviewCount, extractEarliestDate } from "../lib/http.js";
+import { fetchHtml, sleep, extractRatingAndReviewCount, extractEarliestDate } from "../lib/http.js";
 import { deepFindArray, findEarliestDateField } from "../lib/deepFind.js";
 
 const LIST_URL = "https://ridibooks.com/bestsellers/romance";
@@ -31,25 +31,26 @@ export async function collectRidibooks() {
 
   const top15 = items.slice(0, 15);
 
-  // 론칭일은 목록 페이지에 없어서 작품 상세페이지를 하나씩 더 조회합니다.
+  // 론칭일과 키워드 둘 다 목록 페이지엔 없어서, 작품 상세페이지를 하나씩 더 조회합니다.
+  // (한 작품당 상세페이지는 한 번만 요청하고, 그 안에서 론칭일/키워드를 같이 뽑습니다.)
   const enriched = [];
   for (let i = 0; i < top15.length; i++) {
     const item = top15[i];
-    let launchDate = "";
+    let detail = { launchDate: "", keywords: "" };
     try {
-      launchDate = await fetchLaunchDate(item.bookId);
+      detail = await fetchDetailInfo(item.bookId);
     } catch (err) {
-      console.warn(`[리디북스] ${item.title} 론칭일 조회 실패: ${err.message}`);
+      console.warn(`[리디북스] ${item.title} 상세정보 조회 실패: ${err.message}`);
     }
     enriched.push({
       platform: "리디북스",
       rank: i + 1,
       title: item.title,
       author: item.author,
-      launchDate,
+      launchDate: detail.launchDate,
       metricType: "별점(리뷰수)",
       metricValue: item.rating && item.reviewCount ? `${item.rating}(${item.reviewCount})` : "",
-      keywords: item.keywords || "",
+      keywords: detail.keywords,
       url: item.bookId ? `https://ridibooks.com/books/${item.bookId}` : "",
     });
     await sleep(REQUEST_DELAY_MS);
@@ -100,7 +101,6 @@ function extractFromNextData($) {
     const title = book?.series?.title || book?.title?.main || "";
     const author = (book.authors || []).map((a) => a.name).filter(Boolean).join(", ");
     const bookId = book.id ?? "";
-    const description = book?.introduction?.description ?? "";
 
     const ratings = Array.isArray(book.ratings) ? book.ratings : [];
     const totalCount = ratings.reduce((sum, r) => sum + (r.count || 0), 0);
@@ -113,7 +113,6 @@ function extractFromNextData($) {
       author,
       rating: avgRating,
       reviewCount: totalCount ? totalCount.toLocaleString("en-US") : "",
-      keywords: extractHashtags(description),
     };
   });
 }
@@ -144,9 +143,8 @@ function extractFromHtml($) {
 
     const author = $block.find('a[href^="/author/"]').first().text().trim();
     const { rating, reviewCount } = extractRatingAndReviewCount(blockText);
-    const keywords = extractHashtags(blockText);
 
-    results.push({ bookId, title, author, rating, reviewCount, keywords });
+    results.push({ bookId, title, author, rating, reviewCount });
   });
 
   return results;
@@ -191,31 +189,44 @@ function extractDateNearLabel($, labelPattern) {
   return result;
 }
 
-async function fetchLaunchDate(bookId) {
-  if (!bookId) return "";
+// 거의 모든 로맨스 책 상세페이지에 공통으로 붙는 사이트 전역 카테고리 라벨.
+// meta keywords 태그 맨 앞에 항상 끼어있어서, 작품 고유 키워드가 아니므로 제외한다.
+const GENERIC_KEYWORDS = new Set(["ebook", "전자책", "로맨스 e북", "e북"]);
+
+async function fetchDetailInfo(bookId) {
+  if (!bookId) return { launchDate: "", keywords: "" };
   const html = await fetchHtml(`https://ridibooks.com/books/${bookId}`);
   const $ = cheerio.load(html);
 
-  // 1순위: "발행일/등록일/출간일" 같은 라벨 주변에서 직접 찾기 (화면에 실제 보이는 값 기준,
-  // 실측으로 확인된 가장 신뢰도 높은 방법). 태그 구조가 dt/dd든 span이든 상관없이 동작한다.
-  const labelPattern = /발행일|등록일|출간일|최초\s*등록|연재\s*시작/;
-  const fromLabel = extractDateNearLabel($, labelPattern);
-  if (fromLabel) return fromLabel;
+  // 키워드: <meta name="keywords" content="ebook,전자책,...,절륜남,순진녀,..."> 에서 가져온다.
+  // 화면에 보이는 "이 작품의 키워드" 섹션과 동일한 내용이 여기 쉼표로 나열되어 있다(실측 확인됨).
+  const keywordsRaw = $('meta[name="keywords"]').attr("content") || "";
+  const keywords = keywordsRaw
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .filter((k) => !GENERIC_KEYWORDS.has(k))
+    .map((k) => `#${k}`)
+    .join(" ");
 
-  // 2순위: 상세페이지에 __NEXT_DATA__가 있는 경우, 그 안에서 발행 관련 필드를 찾는다.
-  // (베스트 목록 페이지와 달리 상세페이지 __NEXT_DATA__엔 책 정보가 없을 수 있어 후순위로 둔다.)
-  const nextDataRaw = $("#__NEXT_DATA__").html();
-  if (nextDataRaw) {
-    try {
-      const nextDataJson = JSON.parse(nextDataRaw);
-      const found = findEarliestDateField(nextDataJson);
-      if (found) return found;
-    } catch {
-      // JSON 파싱 실패 시 아래 최후 수단으로 계속 진행
+  // 론칭일 (기존 로직 그대로: 라벨 근접 탐색 → __NEXT_DATA__ → 페이지 전체 최후수단)
+  const labelPattern = /발행일|등록일|출간일|최초\s*등록|연재\s*시작/;
+  let launchDate = extractDateNearLabel($, labelPattern);
+
+  if (!launchDate) {
+    const nextDataRaw = $("#__NEXT_DATA__").html();
+    if (nextDataRaw) {
+      try {
+        launchDate = findEarliestDateField(JSON.parse(nextDataRaw));
+      } catch {
+        // JSON 파싱 실패 시 아래 최후 수단으로 계속 진행
+      }
     }
   }
 
-  // 3순위(최후 수단): 페이지 전체에서 가장 이른 날짜. 라벨과 무관하게 고르는 거라
-  // 정확도가 가장 낮으니, 위 두 방법이 전부 실패했을 때만 사용한다.
-  return extractEarliestDate($.text());
+  if (!launchDate) {
+    launchDate = extractEarliestDate($.text());
+  }
+
+  return { launchDate: launchDate || "", keywords };
 }
