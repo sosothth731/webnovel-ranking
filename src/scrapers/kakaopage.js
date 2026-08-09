@@ -3,6 +3,37 @@ import { fetchJson } from "../lib/http.js";
 const LANDING_URL = "https://page.kakao.com/landing/ranking/11/89/";
 
 /**
+ * 랭킹 API 응답 한 항목(item)에서 장르/태그로 보이는 값을 찾는다.
+ * 정확한 필드명이 계속 바뀌는 걸 겪어봐서, 흔히 쓰이는 이름 후보를 순서대로 시도한다.
+ * 배열이면 공백으로 이어붙이고, 문자열이면 그대로 쓴다.
+ */
+function extractKeywords(item) {
+  const candidates = [
+    item?.genre_names,
+    item?.genreNames,
+    item?.tag_names,
+    item?.tagNames,
+    item?.tags,
+    item?.badge_list,
+    item?.badgeList,
+    item?.badges,
+    item?.category_names,
+    item?.categoryNames,
+    item?.sub_genre,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length) {
+      return candidate.map(String).join(" ");
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+
+/**
  * 카카오페이지 로맨스 랭킹 TOP15 수집.
  *
  * 카카오페이지는 클라이언트 렌더링(React/Next) 방식이라 랜딩 페이지 HTML 자체에는
@@ -52,7 +83,7 @@ export async function collectKakaoPage() {
           typeof item?.start_sale_dt === "string" ? item.start_sale_dt.slice(0, 10) : "",
         metricType: "뷰수",
         metricValue: formatNumber(item?.service_property?.view_count),
-        keywords: "", // 랭킹 API 응답에 태그가 없다면 빈 값. 필요 시 작품 상세 API 추가 연동 필요.
+        keywords: extractKeywords(item),
         url,
       };
     })
