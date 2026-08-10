@@ -412,6 +412,7 @@
   <div class="view-nav">
     <a href="#/" class="pill" id="navBoard">보드</a>
     <a href="#/insights" class="pill" id="navInsights">인사이트</a>
+    <a href="#/romance" class="pill" id="navRomance">매일10시무료 로맨스 신작</a>
   </div>
   <div class="search-box">
     <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -472,7 +473,21 @@
 
 <div id="insightsView" style="display:none;"></div>
 
+<div id="romanceView" style="display:none;">
+  <div class="date-row">
+    <span class="date-label" id="romanceDateLabel">불러오는 중…</span>
+    <div class="date-nav">
+      <button type="button" class="nav-arrow" id="romanceDatePrev" aria-label="이전 날짜">‹</button>
+      <span class="date-trigger" style="cursor:default;"><span id="romanceDateTriggerText">날짜</span></span>
+      <button type="button" class="nav-arrow" id="romanceDateNext" aria-label="다음 날짜">›</button>
+    </div>
+  </div>
+  <div id="romanceWrap"></div>
+</div>
+
 <div id="detailView" style="display:none;"></div>
+
+<div id="romanceDetailView" style="display:none;"></div>
 
 </div>
 
@@ -517,6 +532,7 @@ function toggleTrend(){
 }
 
 const CSV_PATH = "output/webnovel_ranking.csv";
+const ROMANCE_CSV_PATH = "output/naver_dailyfree_romance_new.csv";
 const PLATFORMS = [
   { name: "카카오페이지", cls: "kakao" },
   { name: "리디북스", cls: "ridi" },
@@ -524,9 +540,11 @@ const PLATFORMS = [
 ];
 
 let allRows = [];
+let romanceRows = [];
 let dateValues = [];
 let dateSet = new Set();
-let state = { date: null, query: "", viewYM: null, showTrend: true };
+let romanceDateValues = [];
+let state = { date: null, query: "", viewYM: null, showTrend: true, romanceDate: null };
 
 function escapeHtml(str){
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({
@@ -572,6 +590,23 @@ function renderDateNav(){
 
   document.getElementById("dateLabel").innerHTML = state.date
     ? `오늘은 <b>${formatDateLabel(state.date)}</b>`
+    : "";
+}
+
+function renderRomanceDateNav(){
+  const prevBtn = document.getElementById("romanceDatePrev");
+  const nextBtn = document.getElementById("romanceDateNext");
+
+  document.getElementById("romanceDateTriggerText").textContent = state.romanceDate
+    ? formatDateShort(state.romanceDate)
+    : "날짜 없음";
+
+  const idx = romanceDateValues.indexOf(state.romanceDate);
+  prevBtn.disabled = idx === -1 || idx >= romanceDateValues.length - 1;
+  nextBtn.disabled = idx <= 0;
+
+  document.getElementById("romanceDateLabel").innerHTML = state.romanceDate
+    ? `오늘은 <b>${formatDateLabel(state.romanceDate)}</b>`
     : "";
 }
 
@@ -753,6 +788,89 @@ function renderBoard(){
   wrap.innerHTML = `<div class="board">${columns}</div>`;
 }
 
+/**
+ * 매일10시무료 로맨스 신작 카드. TOP15와 스키마가 달라(순위 없음, 별점/댓글수/다운로드수
+ * 세 지표를 한 행에 같이 저장) cardHtml을 그대로 못 쓰고 별도로 둔다.
+ */
+function romanceCardHtml(r){
+  const url = r["URL"] || "";
+  const keywords = (r["키워드"] || "").split(/\s+/).filter(Boolean).slice(0, 4);
+  const chipRow = keywords.length
+    ? `<div class="chip-row">${keywords.map((k) => `<span class="chip naver">${escapeHtml(k)}</span>`).join("")}</div>`
+    : "";
+  const rating = r["별점"] || "—";
+  const commentCount = r["댓글수"] || "—";
+  const downloadCount = r["다운로드수"] || "—";
+
+  return `
+    <div class="card">
+      <div class="card-top">
+        <div class="rank-badge naver">신작</div>
+        <div class="card-launch">${escapeHtml(r["론칭일"]) || "론칭일 미상"}</div>
+        <a class="card-external" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="원본 페이지에서 보기" aria-label="원본 페이지에서 보기">↗</a>
+      </div>
+      <a class="card-title" href="#/romance/work/${encodeURIComponent(url)}">${escapeHtml(r["작품명"])}</a>
+      <div class="card-author">${escapeHtml(r["작가명"]) || "작가 미상"}</div>
+      ${chipRow}
+      <div class="card-footer" style="gap:14px;">
+        <span class="metric-value">★${escapeHtml(rating)}</span>
+        <span class="metric-type">별점</span>
+        <span class="metric-value" style="margin-left:10px;">${escapeHtml(commentCount)}</span>
+        <span class="metric-type">댓글</span>
+        <span class="metric-value" style="margin-left:10px;">${escapeHtml(downloadCount)}</span>
+        <span class="metric-type">다운로드</span>
+      </div>
+    </div>`;
+}
+
+function renderRomanceBoard(){
+  const wrap = document.getElementById("romanceWrap");
+
+  if (!romanceRows.length){
+    wrap.innerHTML = `
+      <div class="board">
+        <div class="empty-state">
+          아직 표시할 데이터가 없습니다.<br>
+          저장소에 <code>${ROMANCE_CSV_PATH}</code> 파일이 있는지 확인해주세요.<br>
+          (GitHub Actions가 최소 한 번은 실행되어야 이 파일이 생깁니다.)
+        </div>
+      </div>`;
+    return;
+  }
+
+  const q = state.query.trim().toLowerCase();
+  let rows = romanceRows.filter((r) => r["확인날짜"] === state.romanceDate);
+  if (q){
+    rows = rows.filter((r) =>
+      (r["작품명"] || "").toLowerCase().includes(q) ||
+      (r["작가명"] || "").toLowerCase().includes(q) ||
+      (r["키워드"] || "").toLowerCase().includes(q)
+    );
+  }
+  // 다운로드수 내림차순 정렬 (순위 컬럼이 없는 데이터셋이라 다운로드수로 대신 정렬)
+  rows.sort((a, b) => {
+    const av = parseMetricNumber("네이버시리즈", a["다운로드수"]) ?? -1;
+    const bv = parseMetricNumber("네이버시리즈", b["다운로드수"]) ?? -1;
+    return bv - av;
+  });
+
+  const body = rows.length
+    ? `<div class="card-list">${rows.map((r) => romanceCardHtml(r)).join("")}</div>`
+    : `<div class="empty-col">해당 날짜/검색어에 결과가 없습니다</div>`;
+
+  wrap.innerHTML = `
+    <div class="board" style="grid-template-columns: 1fr;">
+      <div>
+        <div class="column-head">
+          <span class="dot naver"></span>
+          <span class="column-title">매일10시무료 로맨스 신작</span>
+          <span class="column-count">${rows.length}건</span>
+        </div>
+        ${body}
+      </div>
+    </div>`;
+}
+
 const CHART_COLOR_LIGHT = { kakao: "#C99A2E", ridi: "#3E7FA6", naver: "#4C9A5B" };
 const CHART_COLOR_DARK = { kakao: "#F0B429", ridi: "#22D3EE", naver: "#34D399" };
 
@@ -856,15 +974,25 @@ function clsOf(platformName){
 /**
  * 검색창 드롭다운용: 작품(URL 기준)별로 가장 최근 체크 데이터 한 건만 남긴다.
  * (같은 작품이 날짜마다 여러 행으로 쌓여있으므로, 검색 결과에는 최신 상태만 보여준다.)
+ * TOP15(allRows)와 매일10시무료 로맨스 신작(romanceRows) 둘 다 검색 대상에 포함하고,
+ * 나중에 어느 상세페이지로 보낼지 구분할 수 있도록 각 항목에 _kind를 붙인다.
  */
 function dedupedWorksForSearch(){
   const byUrl = new Map();
   for (const r of allRows){
     const url = r["URL"] || "";
-    const key = url || `${r["플랫폼"]}::${r["작품명"]}`;
+    const key = `top15::${url || r["플랫폼"] + "::" + r["작품명"]}`;
     const prev = byUrl.get(key);
     if (!prev || (r["확인날짜"] || "") > (prev["확인날짜"] || "")){
-      byUrl.set(key, r);
+      byUrl.set(key, { ...r, _kind: "top15" });
+    }
+  }
+  for (const r of romanceRows){
+    const url = r["URL"] || "";
+    const key = `romance::${url || r["작품명"]}`;
+    const prev = byUrl.get(key);
+    if (!prev || (r["확인날짜"] || "") > (prev["확인날짜"] || "")){
+      byUrl.set(key, { ...r, _kind: "romance", "플랫폼": "네이버시리즈" });
     }
   }
   return [...byUrl.values()];
@@ -888,10 +1016,12 @@ function searchMatches(query){
   return matched.slice(0, 20);
 }
 
-function goToWork(url){
+function goToWork(url, kind){
   hideSearchResults();
   document.getElementById("searchInput").blur();
-  location.hash = `#/work/${encodeURIComponent(url)}`;
+  location.hash = kind === "romance"
+    ? `#/romance/work/${encodeURIComponent(url)}`
+    : `#/work/${encodeURIComponent(url)}`;
 }
 
 function hideSearchResults(){
@@ -920,12 +1050,13 @@ function renderSearchResults(){
   box.innerHTML = matches.map((r, i) => {
     const url = r["URL"] || "";
     const cls = clsOf(r["플랫폼"]);
+    const badge = r._kind === "romance" ? "네이버시리즈 · 매일10시무료 신작" : r["플랫폼"];
     return `
-      <button type="button" class="search-result-item${i === 0 ? " active" : ""}" data-url="${escapeHtml(url)}">
+      <button type="button" class="search-result-item${i === 0 ? " active" : ""}" data-url="${escapeHtml(url)}" data-kind="${r._kind}">
         <span class="dot ${cls}"></span>
         <span class="search-result-main">
           <div class="search-result-title">${escapeHtml(r["작품명"])}</div>
-          <div class="search-result-meta">${escapeHtml(r["작가명"]) || "작가 미상"} · ${escapeHtml(r["플랫폼"])}</div>
+          <div class="search-result-meta">${escapeHtml(r["작가명"]) || "작가 미상"} · ${escapeHtml(badge)}</div>
         </span>
         <span class="search-result-date">최근 ${escapeHtml((r["확인날짜"] || "").slice(5))}</span>
       </button>`;
@@ -933,7 +1064,7 @@ function renderSearchResults(){
   box.hidden = false;
 
   box.querySelectorAll(".search-result-item").forEach((btn) => {
-    btn.addEventListener("click", () => goToWork(btn.dataset.url));
+    btn.addEventListener("click", () => goToWork(btn.dataset.url, btn.dataset.kind));
   });
 }
 
@@ -1019,9 +1150,103 @@ function renderDetailView(url){
     </table>`;
 }
 
+function getRomanceWorkHistory(url){
+  return romanceRows
+    .filter((r) => r["URL"] === url)
+    .map((r) => ({
+      date: r["확인날짜"],
+      title: r["작품명"],
+      author: r["작가명"],
+      launchDate: r["론칭일"],
+      keywords: r["키워드"] || "",
+      ratingRaw: r["별점"],
+      rating: Number(r["별점"]),
+      commentCountRaw: r["댓글수"],
+      commentCount: parseMetricNumber("네이버시리즈", r["댓글수"]),
+      downloadCountRaw: r["다운로드수"],
+      downloadCount: parseMetricNumber("네이버시리즈", r["다운로드수"]),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * 매일10시무료 로맨스 신작 상세페이지. 다운로드수/댓글수/별점을 같은 행에서 동시에
+ * 추적하는 데이터셋이라, 지표 하나짜리 renderDetailView와는 별도로 둔다.
+ * 세 지표는 값 범위가 서로 많이 달라서(별점 0~10, 댓글수/다운로드수는 훨씬 큼)
+ * 그래프 세 개를 따로 그린다.
+ */
+function renderRomanceDetailView(url){
+  const history = getRomanceWorkHistory(url);
+  const container = document.getElementById("romanceDetailView");
+
+  if (!history.length){
+    container.innerHTML = `
+      <button class="back-btn" onclick="location.hash='#/romance'">← 목록으로</button>
+      <div class="empty-state">이 작품의 기록을 찾을 수 없습니다.</div>`;
+    return;
+  }
+
+  const latest = history[history.length - 1];
+  const cls = "naver";
+  const color = chartColorFor(cls);
+
+  const keywordSource = [...history].reverse().find((h) => h.keywords && h.keywords.trim());
+  const keywords = keywordSource ? keywordSource.keywords.split(/\s+/).filter(Boolean) : [];
+  const keywordRow = keywords.length
+    ? `<div class="chip-row" style="margin-bottom:16px;">${keywords.map((k) => `<span class="chip ${cls}">${escapeHtml(k)}</span>`).join("")}</div>`
+    : "";
+
+  const ratingChart = buildLineChartSvg(history.map((h) => ({ date: h.date, value: h.rating })), color);
+  const commentChart = buildLineChartSvg(history.map((h) => ({ date: h.date, value: h.commentCount })), color);
+  const downloadChart = buildLineChartSvg(history.map((h) => ({ date: h.date, value: h.downloadCount })), color);
+
+  const rowsHtml = history.slice().reverse().map((h) =>
+    `<tr>
+      <td>${escapeHtml(h.date)}</td>
+      <td>${escapeHtml(h.ratingRaw) || "—"}</td>
+      <td>${escapeHtml(h.commentCountRaw) || "—"}</td>
+      <td>${escapeHtml(h.downloadCountRaw) || "—"}</td>
+    </tr>`
+  ).join("");
+
+  container.innerHTML = `
+    <button class="back-btn" onclick="location.hash='#/romance'">← 목록으로</button>
+    <div class="detail-head">
+      <span class="tag ${cls}" style="display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--${cls}-tint);color:var(--${cls}-text);">네이버시리즈 · 매일10시무료 로맨스 신작</span>
+      <span class="card-launch" style="font-size:12px;color:var(--text-muted);">${escapeHtml(latest.launchDate) || "론칭일 미상"} 론칭</span>
+    </div>
+    <h1 class="detail-title">${escapeHtml(latest.title)}</h1>
+    <div class="detail-author">${escapeHtml(latest.author) || "작가 미상"}</div>
+    ${keywordRow}
+    <a class="detail-original-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">원본 페이지에서 보기 ↗</a>
+
+    <div class="chart-card">
+      <div class="chart-title">별점 추이 · 수집된 ${history.length}개 지점</div>
+      ${ratingChart}
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">댓글수 추이</div>
+      ${commentChart}
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">다운로드수 추이</div>
+      ${downloadChart}
+    </div>
+
+    <table class="history-table">
+      <thead><tr><th>날짜</th><th>별점</th><th>댓글수</th><th>다운로드수</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+}
+
 function updateNavActive(hash){
-  document.getElementById("navBoard").classList.toggle("active", hash !== "#/insights" && !hash.startsWith("#/work/"));
-  document.getElementById("navInsights").classList.toggle("active", hash === "#/insights");
+  const isRomance = hash === "#/romance" || hash.startsWith("#/romance/work/");
+  const isInsights = hash === "#/insights";
+  document.getElementById("navBoard").classList.toggle(
+    "active", !isInsights && !isRomance && !hash.startsWith("#/work/")
+  );
+  document.getElementById("navInsights").classList.toggle("active", isInsights);
+  document.getElementById("navRomance").classList.toggle("active", isRomance);
 }
 
 function rowsForDate(date){
@@ -1297,25 +1522,36 @@ function route(){
   const boardView = document.getElementById("boardView");
   const insightsView = document.getElementById("insightsView");
   const detailView = document.getElementById("detailView");
+  const romanceView = document.getElementById("romanceView");
+  const romanceDetailView = document.getElementById("romanceDetailView");
 
-  if (hash.startsWith("#/work/")){
+  // 모든 화면을 일단 숨기고, 라우팅된 화면 하나만 켠다.
+  [boardView, insightsView, detailView, romanceView, romanceDetailView].forEach((el) => {
+    el.style.display = "none";
+  });
+
+  if (hash.startsWith("#/romance/work/")){
     header.style.display = "none";
-    boardView.style.display = "none";
-    insightsView.style.display = "none";
+    romanceDetailView.style.display = "block";
+    renderRomanceDetailView(decodeURIComponent(hash.slice("#/romance/work/".length)));
+    window.scrollTo(0, 0);
+  } else if (hash.startsWith("#/work/")){
+    header.style.display = "none";
     detailView.style.display = "block";
     renderDetailView(decodeURIComponent(hash.slice("#/work/".length)));
     window.scrollTo(0, 0);
   } else if (hash === "#/insights"){
     header.style.display = "flex";
-    boardView.style.display = "none";
-    detailView.style.display = "none";
     insightsView.style.display = "block";
     renderInsights();
     window.scrollTo(0, 0);
+  } else if (hash === "#/romance"){
+    header.style.display = "flex";
+    romanceView.style.display = "block";
+    renderRomanceBoard();
+    window.scrollTo(0, 0);
   } else {
     header.style.display = "flex";
-    detailView.style.display = "none";
-    insightsView.style.display = "none";
     boardView.style.display = "block";
   }
   updateNavActive(hash);
@@ -1327,6 +1563,9 @@ function setup(){
   dateValues = [...new Set(allRows.map((r) => r["확인날짜"]))].sort().reverse();
   dateSet = new Set(dateValues);
   state.date = dateValues[0] || null;
+
+  romanceDateValues = [...new Set(romanceRows.map((r) => r["확인날짜"]))].sort().reverse();
+  state.romanceDate = romanceDateValues[0] || null;
 
   const savedTrend = localStorage.getItem("showTrend");
   state.showTrend = savedTrend === null ? true : savedTrend === "1";
@@ -1377,9 +1616,28 @@ function setup(){
     }
   });
 
+  renderRomanceDateNav();
+  document.getElementById("romanceDatePrev").addEventListener("click", () => {
+    const idx = romanceDateValues.indexOf(state.romanceDate);
+    if (idx < romanceDateValues.length - 1){
+      state.romanceDate = romanceDateValues[idx + 1];
+      renderRomanceDateNav();
+      renderRomanceBoard();
+    }
+  });
+  document.getElementById("romanceDateNext").addEventListener("click", () => {
+    const idx = romanceDateValues.indexOf(state.romanceDate);
+    if (idx > 0){
+      state.romanceDate = romanceDateValues[idx - 1];
+      renderRomanceDateNav();
+      renderRomanceBoard();
+    }
+  });
+
   document.getElementById("searchInput").addEventListener("input", (e) => {
     state.query = e.target.value;
     renderBoard();
+    renderRomanceBoard();
     renderSearchResults();
   });
   document.getElementById("searchInput").addEventListener("focus", () => {
@@ -1392,7 +1650,7 @@ function setup(){
     }
     if (e.key === "Enter"){
       const first = searchMatches(state.query)[0];
-      if (first) goToWork(first["URL"] || "");
+      if (first) goToWork(first["URL"] || "", first._kind);
     }
   });
   document.addEventListener("click", (e) => {
@@ -1403,20 +1661,26 @@ function setup(){
   route();
 }
 
-fetch(CSV_PATH)
-  .then((res) => {
-    if (!res.ok) throw new Error("CSV fetch failed");
-    return res.text();
-  })
-  .then((text) => {
-    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-    allRows = parsed.data;
-    setup();
-  })
-  .catch(() => {
-    allRows = [];
-    setup();
-  });
+Promise.all([
+  fetch(CSV_PATH)
+    .then((res) => {
+      if (!res.ok) throw new Error("CSV fetch failed");
+      return res.text();
+    })
+    .then((text) => Papa.parse(text, { header: true, skipEmptyLines: true }).data)
+    .catch(() => []),
+  fetch(ROMANCE_CSV_PATH)
+    .then((res) => {
+      if (!res.ok) throw new Error("Romance CSV fetch failed");
+      return res.text();
+    })
+    .then((text) => Papa.parse(text, { header: true, skipEmptyLines: true }).data)
+    .catch(() => []),
+]).then(([mainData, romanceData]) => {
+  allRows = mainData;
+  romanceRows = romanceData;
+  setup();
+});
 </script>
 </body>
 </html>

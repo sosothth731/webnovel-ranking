@@ -7,7 +7,7 @@
   "scripts": {
     "collect": "node src/collect.js",
     "dedupe": "node scripts/dedupe-csv.js",
-    "test": "node test/run_test.mjs && node test/run_ridi_test.mjs"
+    "test": "node test/run_test.mjs && node test/run_ridi_test.mjs && node test/run_index_html_test.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -15,5 +15,8 @@
   "dependencies": {
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   }
 }
