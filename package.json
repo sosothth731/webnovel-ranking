@@ -6,7 +6,8 @@
   "main": "src/collect.js",
   "scripts": {
     "collect": "node src/collect.js",
-    "dedupe": "node scripts/dedupe-csv.js"
+    "dedupe": "node scripts/dedupe-csv.js",
+    "test": "node test/run_test.mjs && node test/run_ridi_test.mjs"
   },
   "engines": {
     "node": ">=18"

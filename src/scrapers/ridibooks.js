@@ -151,9 +151,127 @@ function extractFromHtml($) {
 }
 
 /**
+ * HTML 안에서 `var 이름 = { ... };` 또는 `var 이름 = [ ... ];` 형태로 심어진
+ * JS 리터럴을 괄호 짝을 직접 세어가며(문자열 안의 {, }, ; 는 무시) 통째로 뽑아낸다.
+ * 정규식으로 잘라내면 문자열 값 안에 든 특수문자 때문에 깨지기 쉬워서 이 방식을 쓴다.
+ */
+function extractBalancedJsLiteral(html, varDeclaration, openChar, closeChar) {
+  const declIdx = html.indexOf(varDeclaration);
+  if (declIdx === -1) return null;
+  const start = html.indexOf(openChar, declIdx);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let quoteChar = "";
+  let escaped = false;
+
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (c === "\\") {
+        escaped = true;
+      } else if (c === quoteChar) {
+        inString = false;
+      }
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inString = true;
+      quoteChar = c;
+      continue;
+    }
+    if (c === openChar) {
+      depth++;
+    } else if (c === closeChar) {
+      depth--;
+      if (depth === 0) return html.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * "20260807235959"(14자리), "20260807"(8자리), "2026-08-07 07:00:12" 등
+ * 리디북스 상세페이지의 다양한 날짜 문자열 포맷을 YYYY-MM-DD로 통일한다.
+ */
+export function normalizeRidiDate(raw) {
+  if (!raw) return null;
+  const s = String(raw);
+  let m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+
+/**
+ * 론칭일(=시리즈 1화/1권이 등록된 날짜)을 상세페이지에 심어진 `var bookDetail = {...}`,
+ * `var seriesBookListJson = [...]` 안의 날짜 필드들에서 뽑아, 그중 가장 이른 날짜를 고른다.
+ *
+ * 실측으로 확인된 것: 리디북스 개별 책 상세페이지(/books/{id})는 __NEXT_DATA__ 기반이 아니라
+ * 서버가 렌더링한 <script> 태그 안에 `var bookDetail = {...}`, `var seriesBookListJson = [...]`
+ * 형태로 작품 정보를 직접 심어둔다 (베스트셀러 "목록" 페이지와는 다른 구조). 그래서 기존에
+ * "발행일/등록일" 같은 라벨 텍스트를 화면에서 찾던 방식은 엉뚱한 날짜(예: 약관 개정일처럼
+ * 페이지 어딘가에 있는 무관한 날짜)를 잘못 집어올 수밖에 없었다.
+ *
+ * pub_date/reg_date/open_date/ridi_open_date 중 어떤 필드가 항상 존재하는지 100% 보장할 수
+ * 없어서, 존재하는 걸 전부 모아 가장 이른 날짜를 쓰는 방식으로 방어적으로 짰다. 시리즈가 여러
+ * 권이면 seriesBookListJson의 각 권 날짜도 같이 비교해서, 상세페이지가 1권이 아닌 다른 권으로
+ * 열려도 시리즈 전체의 가장 이른(=최초 등록) 날짜를 찾는다.
+ */
+export function extractLaunchDateFromInlineScript(html) {
+  const candidates = [];
+
+  const bookDetailRaw = extractBalancedJsLiteral(html, "var bookDetail", "{", "}");
+  if (bookDetailRaw) {
+    try {
+      const bookDetail = JSON.parse(bookDetailRaw);
+      candidates.push(
+        bookDetail?.pub_date,
+        bookDetail?.reg_date,
+        bookDetail?.open_date,
+        bookDetail?.property_info?.ridi_open_date,
+        bookDetail?.property_info?.paper_pub_date
+      );
+    } catch {
+      // JSON 파싱 실패 시 무시하고 아래 seriesBookListJson/폴백으로 계속 진행
+    }
+  }
+
+  const seriesListRaw = extractBalancedJsLiteral(html, "var seriesBookListJson", "[", "]");
+  if (seriesListRaw) {
+    try {
+      const seriesList = JSON.parse(seriesListRaw);
+      if (Array.isArray(seriesList)) {
+        for (const vol of seriesList) {
+          candidates.push(
+            vol?.reg_date,
+            vol?.open_date,
+            vol?.property_info?.ridi_open_date,
+            vol?.property_info?.paper_pub_date
+          );
+        }
+      }
+    } catch {
+      // JSON 파싱 실패 시 무시
+    }
+  }
+
+  const normalized = candidates.map(normalizeRidiDate).filter(Boolean).sort();
+  return normalized.length ? normalized[0] : null;
+}
+
+/**
  * "발행일" 같은 라벨 글자를 가진 요소를 찾아서, 그 안(라벨+값이 한 덩어리인 경우)이나
  * 바로 다음 형제 요소들, 혹은 부모의 다음 형제 블록에서 날짜를 찾는다.
  * 정확한 태그 구조(dt/dd, th/td 등)를 몰라도 동작하도록 만든 범용 탐색 방식이다.
+ *
+ * 주의: 실측 결과 리디북스 개별 책 상세페이지에서는 이 방식이 페이지 어딘가의 무관한 날짜를
+ * 잘못 집어오는 문제가 확인되어, extractLaunchDateFromInlineScript()가 실패했을 때만 쓰는
+ * 최후의 폴백으로 격하시켰다.
  */
 function extractDateNearLabel($, labelPattern) {
   let result = null;
@@ -209,9 +327,15 @@ async function fetchDetailInfo(bookId) {
     .map((k) => `#${k}`)
     .join(" ");
 
-  // 론칭일 (기존 로직 그대로: 라벨 근접 탐색 → __NEXT_DATA__ → 페이지 전체 최후수단)
-  const labelPattern = /발행일|등록일|출간일|최초\s*등록|연재\s*시작/;
-  let launchDate = extractDateNearLabel($, labelPattern);
+  // 론칭일: 1순위로 상세페이지 <script>에 심어진 bookDetail/seriesBookListJson의
+  // 실제 등록일 필드를 쓴다 (실측 확인된 정확한 구조). 혹시 이 구조가 없는 페이지가
+  // 섞여 있을 경우에만 예전 방식(라벨 근접 탐색 → __NEXT_DATA__ → 페이지 전체 최후수단)으로 폴백한다.
+  let launchDate = extractLaunchDateFromInlineScript(html);
+
+  if (!launchDate) {
+    const labelPattern = /발행일|등록일|출간일|최초\s*등록|연재\s*시작/;
+    launchDate = extractDateNearLabel($, labelPattern);
+  }
 
   if (!launchDate) {
     const nextDataRaw = $("#__NEXT_DATA__").html();
