@@ -2,7 +2,13 @@ import "dotenv/config";
 import { collectKakaoPage } from "./scrapers/kakaopage.js";
 import { collectRidibooks } from "./scrapers/ridibooks.js";
 import { collectNaverSeries } from "./scrapers/naverseries.js";
-import { appendRowsToCsv, writeDailySnapshotCsv } from "./lib/csv.js";
+import { collectNaverDailyFreeNewRomance } from "./scrapers/naverseries-dailyfree-romance.js";
+import {
+  appendRowsToCsv,
+  writeDailySnapshotCsv,
+  appendRomanceRowsToCsv,
+  writeRomanceDailySnapshotCsv,
+} from "./lib/csv.js";
 
 const PLATFORMS = [
   { name: "카카오페이지", run: collectKakaoPage },
@@ -35,6 +41,31 @@ async function main() {
     );
   } else {
     process.stdout.write("\n저장할 데이터가 없습니다. 모든 플랫폼이 실패했습니다.\n");
+  }
+
+  // 네이버시리즈 "매일10시무료" 로맨스 신작 다운로드수/댓글수/별점 추이 별도 수집.
+  // TOP15 랭킹과는 스키마가 달라서(별점·댓글수·다운로드수를 한 행에 같이 저장) 별도 CSV로 관리한다.
+  process.stdout.write("\n[네이버시리즈-매일10시무료 로맨스 신작] 수집 시작...\n");
+  try {
+    const romanceRows = await collectNaverDailyFreeNewRomance();
+    if (romanceRows.length) {
+      const { filePath, collectedDate, count } = await appendRomanceRowsToCsv(romanceRows);
+      const dailyPath = await writeRomanceDailySnapshotCsv(romanceRows);
+      process.stdout.write(
+        `[네이버시리즈-매일10시무료 로맨스 신작] 완료: ${count}건 (${collectedDate})\n- 누적 파일: ${filePath}\n- 오늘자 스냅샷: ${dailyPath}\n`
+      );
+      summary.push({ platform: "네이버시리즈-매일10시무료 로맨스 신작", status: "성공", count });
+    } else {
+      process.stdout.write("[네이버시리즈-매일10시무료 로맨스 신작] 완료: 오늘은 해당하는 작품이 없습니다.\n");
+      summary.push({ platform: "네이버시리즈-매일10시무료 로맨스 신작", status: "성공", count: 0 });
+    }
+  } catch (err) {
+    console.error(`[네이버시리즈-매일10시무료 로맨스 신작] 실패: ${err.message}`);
+    summary.push({
+      platform: "네이버시리즈-매일10시무료 로맨스 신작",
+      status: "실패",
+      error: err.message,
+    });
   }
 
   process.stdout.write("\n===== 실행 요약 =====\n");

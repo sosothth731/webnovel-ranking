@@ -154,3 +154,85 @@ export async function writeDailySnapshotCsv(rows, outputDir = "output") {
 
   return filePath;
 }
+
+// ── 네이버시리즈 "매일10시무료" 로맨스 신작 전용 데이터셋 ──────────────────
+// TOP15 랭킹(지표종류/지표값 한 쌍)과 스키마가 달라서(별점·댓글수·다운로드수를
+// 동시에 같은 행에 저장) 위 HEADER/rowToCsvLine을 재사용하지 않고 별도로 둔다.
+
+const ROMANCE_HEADER = [
+  "확인날짜",
+  "작품명",
+  "작가명",
+  "론칭일",
+  "별점",
+  "댓글수",
+  "다운로드수",
+  "키워드",
+  "URL",
+];
+
+function romanceRowToCsvLine(row, collectedDate) {
+  return [
+    collectedDate,
+    row.title,
+    row.author,
+    row.launchDate,
+    row.rating,
+    row.commentCount,
+    row.downloadCount,
+    row.keywords,
+    row.url,
+  ]
+    .map(csvEscape)
+    .join(",");
+}
+
+/**
+ * rows를 output/naver_dailyfree_romance_new.csv 에 저장합니다.
+ * appendRowsToCsv와 동일하게, 같은 날짜(확인날짜) 기존 데이터는 지우고 새로 쓰며
+ * 다른 날짜 데이터는 그대로 유지합니다 (날짜별로 계속 누적되어 추이 확인 가능).
+ */
+export async function appendRomanceRowsToCsv(rows, outputDir = "output") {
+  await mkdir(outputDir, { recursive: true });
+  const filePath = path.join(outputDir, "naver_dailyfree_romance_new.csv");
+  const collectedDate = todayKoreaDate();
+
+  let keptLines = [];
+  if (await fileExists(filePath)) {
+    const raw = await readFile(filePath, "utf8");
+    const records = parseCsv(raw);
+    const dataRecords = records.slice(1);
+    keptLines = dataRecords
+      .filter((r) => r[0] !== collectedDate)
+      .map((r) => r.map(csvEscape).join(","));
+  }
+
+  const newLines = rows.map((row) => romanceRowToCsvLine(row, collectedDate));
+  const allLines = [...keptLines, ...newLines];
+
+  const bom = "\ufeff";
+  const body = allLines.length ? allLines.join("\r\n") + "\r\n" : "";
+  await writeFile(filePath, bom + ROMANCE_HEADER.join(",") + "\r\n" + body, "utf8");
+
+  return { filePath, collectedDate, count: rows.length };
+}
+
+/**
+ * 오늘 날짜 전용 스냅샷도 별도로 저장합니다 (output/daily_romance/YYYY-MM-DD.csv).
+ */
+export async function writeRomanceDailySnapshotCsv(rows, outputDir = "output") {
+  const collectedDate = todayKoreaDate();
+  const dailyDir = path.join(outputDir, "daily_romance");
+  await mkdir(dailyDir, { recursive: true });
+  const filePath = path.join(dailyDir, `${collectedDate}.csv`);
+
+  const bom = "\ufeff";
+  const lines = rows.map((row) => romanceRowToCsvLine(row, collectedDate));
+  await writeFile(
+    filePath,
+    bom + ROMANCE_HEADER.join(",") + "\r\n" + lines.join("\r\n") + "\r\n",
+    "utf8"
+  );
+
+  return filePath;
+}
