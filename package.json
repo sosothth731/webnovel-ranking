@@ -7,7 +7,7 @@
   "scripts": {
     "collect": "node src/collect.js",
     "dedupe": "node scripts/dedupe-csv.js",
-    "test": "node test/run_test.mjs && node test/run_ridi_test.mjs && node test/run_index_html_test.mjs",
+    "test": "node test/run_test.mjs && node test/run_ridi_test.mjs && node test/run_index_html_test.mjs && node test/run_browser_test.mjs",
     "setup:browser": "playwright install chromium"
   },
   "engines": {
