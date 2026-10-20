@@ -9,6 +9,7 @@ import {
   appendRomanceRowsToCsv,
   writeRomanceDailySnapshotCsv,
 } from "./lib/csv.js";
+import { closeBrowser } from "./lib/browser.js";
 
 const PLATFORMS = [
   { name: "카카오페이지", run: collectKakaoPage },
@@ -83,7 +84,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("치명적 오류:", err);
-  process.exitCode = 1;
-});
+main()
+  .catch((err) => {
+    console.error("치명적 오류:", err);
+    process.exitCode = 1;
+  })
+  .finally(() => closeBrowser()); // 브라우저가 떠 있으면 프로세스가 끝나지 않으므로 반드시 닫는다

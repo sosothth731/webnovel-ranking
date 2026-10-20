@@ -1,12 +1,49 @@
 import * as cheerio from "cheerio";
 import { fetchHtml, sleep, extractRatingAndReviewCount, extractEarliestDate } from "../lib/http.js";
 import { deepFindArray, findEarliestDateField } from "../lib/deepFind.js";
+import { fetchHtmlViaBrowser } from "../lib/browser.js";
 
 const LIST_URL = "https://ridibooks.com/bestsellers/romance";
 const REQUEST_DELAY_MS = Number(process.env.REQUEST_DELAY_MS || 500);
 
+// 리디북스가 HTTP 403(Forbidden)으로 막는 경우를 줄이기 위해, 실제 브라우저가 페이지를 열 때
+// 보내는 것과 비슷한 헤더를 추가로 붙인다. (UA/Accept-Language만 보내면 봇으로 의심받기 쉽다.)
+// 주의: IP 대역 자체를 차단하는 경우(GitHub Actions 서버 IP 등)에는 헤더만으로는 해결되지 않는다.
+const RIDI_HEADERS = {
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  Referer: "https://ridibooks.com/",
+  "Upgrade-Insecure-Requests": "1",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "same-origin",
+  "Sec-Fetch-User": "?1",
+};
+
+let warnedNoBrowser = false;
+
+/**
+ * 리디북스 페이지를 가져온다. Node fetch는 403으로 막히는 경우가 있어서 기본은 실제
+ * 브라우저(Playwright)로 열고, 브라우저를 쓸 수 없는 환경이면 일반 fetch로 되돌아간다.
+ * 환경변수 RIDI_USE_BROWSER=0 이면 브라우저를 쓰지 않는다.
+ */
+async function fetchRidiHtml(url) {
+  if (process.env.RIDI_USE_BROWSER !== "0") {
+    try {
+      return await fetchHtmlViaBrowser(url);
+    } catch (err) {
+      if (err.code !== "BROWSER_UNAVAILABLE") throw err;
+      if (!warnedNoBrowser) {
+        warnedNoBrowser = true;
+        console.warn(`[리디북스] ${err.message} → 일반 요청으로 시도합니다.`);
+      }
+    }
+  }
+  return fetchHtml(url, { headers: RIDI_HEADERS });
+}
+
 export async function collectRidibooks() {
-  const html = await fetchHtml(LIST_URL);
+  const html = await fetchRidiHtml(LIST_URL);
   const $ = cheerio.load(html);
 
   let items = extractFromNextData($);
@@ -313,7 +350,7 @@ const GENERIC_KEYWORDS = new Set(["ebook", "전자책", "로맨스 e북", "e북"
 
 async function fetchDetailInfo(bookId) {
   if (!bookId) return { launchDate: "", keywords: "" };
-  const html = await fetchHtml(`https://ridibooks.com/books/${bookId}`);
+  const html = await fetchRidiHtml(`https://ridibooks.com/books/${bookId}`);
   const $ = cheerio.load(html);
 
   // 키워드: <meta name="keywords" content="ebook,전자책,...,절륜남,순진녀,..."> 에서 가져온다.

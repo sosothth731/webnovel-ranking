@@ -16,7 +16,11 @@ async function fetchWithRetry(url, options = {}, retries = 2) {
         headers: { ...DEFAULT_HEADERS, ...(options.headers || {}) },
       });
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText} - ${url}`);
+        const diag = ["server", "cf-ray", "cf-mitigated"]
+          .map((h) => (res.headers.get(h) ? `${h}=${res.headers.get(h)}` : ""))
+          .filter(Boolean)
+          .join(" ");
+        throw new Error(`HTTP ${res.status} ${res.statusText}${diag ? ` [${diag}]` : ""} - ${url}`);
       }
       return res;
     } catch (err) {
