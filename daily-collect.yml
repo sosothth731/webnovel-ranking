@@ -24,15 +24,29 @@ jobs:
       - name: 의존성 설치
         run: npm install
 
+      # 플랫폼 하나만 실패해도 npm run collect가 종료코드 1을 내는데, 그러면 아래 커밋 단계가
+      # 통째로 건너뛰어져서 "성공한 플랫폼의 데이터"까지 저장이 안 된다. 그래서 수집 단계는
+      # 실패해도 일단 계속 진행시키고(continue-on-error), 맨 마지막에 실패 여부를 따로 표시한다.
       - name: 랭킹 수집 실행
+        id: collect
+        continue-on-error: true
         env:
           KAKAO_RANKING_API_URL: ${{ secrets.KAKAO_RANKING_API_URL }}
         run: npm run collect
 
       - name: 결과 CSV 커밋
+        if: always()
         run: |
           git config user.name "webnovel-ranking-bot"
           git config user.email "actions@users.noreply.github.com"
           git add output/
           git diff --cached --quiet || git commit -m "chore: 랭킹 데이터 자동 수집 $(date -u +'%Y-%m-%d')"
           git push
+
+      # 일부 플랫폼이 실패했더라도 위에서 데이터는 이미 커밋했다. 여기서 실패로 표시해서
+      # GitHub Actions 목록에 빨간 X가 뜨고(알림 메일도 감), 놓치지 않게 한다.
+      - name: 수집 실패 여부 표시
+        if: steps.collect.outcome == 'failure'
+        run: |
+          echo "일부 플랫폼 수집에 실패했습니다. '랭킹 수집 실행' 단계 로그의 '실행 요약'을 확인하세요."
+          exit 1
